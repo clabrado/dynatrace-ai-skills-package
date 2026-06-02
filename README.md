@@ -72,29 +72,46 @@ Skills consumed by this package:
 
 ### Incident-Anchored Skills
 
-| Skill | Anchor | Output |
-|---|---|---|
-| [`/dt-rcf`](skills/dt-rcf/SKILL.md) | Problem ID, Service, Time window, Trace ID, or Error pattern | Forensic RCA report (MD+PDF) |
-| [`/dt-pr-notebooks`](skills/dt-pr-notebooks/SKILL.md) | Problem ID | Deployed Dynatrace Notebook |
-| [`/dt-pr-dashboard`](skills/dt-pr-dashboard/SKILL.md) | Problem ID | Deployed Dynatrace Dashboard |
+#### [`/dt-rcf`](skills/dt-rcf/SKILL.md) — Root Cause Forensics
+Accepts any forensic anchor — Problem ID, service name, time window, trace ID, or error pattern — and dispatches four parallel workers across spans, logs, services, and Davis problems telemetry. Builds a ranked hypothesis graph with confidence scores (span evidence × log corroboration × runtime signal × recurrence history), synthesizes findings via Davis CoPilot, and produces a complete MD+PDF forensic report with evidence chain. Use when Davis hasn't fired yet, when RCA spans multiple services without a clear anchor, or when you need a defensible evidence chain rather than a point-in-time guess.
+
+#### [`/dt-pr-notebooks`](skills/dt-pr-notebooks/SKILL.md) — Problem to Deployed Notebook
+Given a Dynatrace Problem ID, queries live telemetry to identify root cause, builds an ASCII topology diagram of the cascade, and deploys a Dynatrace Notebook with step-by-step runnable DQL queries paired with SRE-readable annotations. Each section explains what to look for, what healthy looks like, and what the current state means for the incident. Use when you want a persistent, re-runnable artifact the owning team can use for self-service investigation or postmortem walkthroughs.
+
+#### [`/dt-pr-dashboard`](skills/dt-pr-dashboard/SKILL.md) — Problem to Deployed Dashboard
+Given a Dynatrace Problem ID, diagnoses root cause from live telemetry and deploys a Dynatrace Dashboard optimized for simultaneous operator visibility during an active incident. Tile types are selected by problem category — ERROR gets error rate trend + log volume + HTTP status distribution; SLOWDOWN gets latency percentiles + slow endpoint table; AVAILABILITY gets entity health honeycomb — with a fixed verification row that shows zero when the fix has taken hold. Use when you want a live ops view pinned to the incident window that any operator can open and interpret immediately.
+
+---
 
 ### Tier 1 — Proactive / Pre-Emptive
 
-| Skill | Anchor | Output | Validated |
-|---|---|---|---|
-| [`/dt-slo-burn`](skills/dt-slo-burn/SKILL.md) | SLO ID or name | Burn briefing (MD+PDF) | ✅ |
-| [`/dt-vuln-blast`](skills/dt-vuln-blast/SKILL.md) | CVE or `library@version` | Blast radius report (MD+PDF) + optional GitHub PR | ✅ |
-| [`/dt-deploy-risk`](skills/dt-deploy-risk/SKILL.md) | Deploy event ID or Service+Version | Risk scorecard (MD+PDF) | ✅ |
-| [`/dt-dem-vitals`](skills/dt-dem-vitals/SKILL.md) | RUM app + time windows | Web Vitals regression brief (MD+PDF) | ✅ |
-| [`/dt-k8s-podf`](skills/dt-k8s-podf/SKILL.md) | Namespace + workload | Pod forensics (MD+PDF or Notebook) | ✅ |
+#### [`/dt-slo-burn`](skills/dt-slo-burn/SKILL.md) — Error-Budget Burn Briefing ✅ Validated
+Computes multi-window burn rates per the Google SRE Workbook (fast: 1h + 5m @ 14.4×, slow: 6h + 30m @ 6×) against any Custom SLI SLO, identifies the top contributing endpoints and consumers, and surfaces correlated open Davis problems. Optionally projects the budget-exhaustion datetime using Dynatrace predictive analytics, giving a concrete "we'll breach at 14:32 UTC" answer rather than just a rate. Produces a GO / SLOW BURN / FAST BURN / FREEZE verdict with a sourced MD+PDF briefing — use before a release, as a CI deploy gate, during a mid-incident exec brief, or for weekly SRE budget reviews.
+
+#### [`/dt-vuln-blast`](skills/dt-vuln-blast/SKILL.md) — Vulnerability Blast Radius ✅ Validated
+Turns a CVE or library coordinate into a prioritized fix list of production services, ranked by real reachability evidence from the span call graph — not just CVSS score — weighted by traffic volume, internet exposure, and error-path involvement. Maps each affected service to its owning team via Kubernetes labels, computes a weighted risk score (reachability 35% / traffic 25% / internet 20% / error-path 20%), and can optionally draft a manifest upgrade patch as a GitHub draft PR. Use for AppSec triage at scale, sprint planning by exploitability, Log4Shell-class supply-chain response, or customer-facing AppSec demos in `-clean` mode.
+
+#### [`/dt-deploy-risk`](skills/dt-deploy-risk/SKILL.md) — Deployment Risk Scorecard ✅ Validated
+Compares equivalent pre- and post-deploy windows across RED metrics, new exception types (set-difference, so pre-existing errors don't inflate the score), new log patterns, and downstream dependency health changes. Scores 0–100 via a weighted rubric (error rate 35% / latency 25% / new exceptions 25% / dependency churn 15%) and assigns a GO / HOLD / ROLLBACK verdict with a sourced scorecard suitable for attaching to a change request. Use as a self-service post-deploy sanity check, a CI webhook gate, or a rollback decision audit trail — before the next page fires.
+
+#### [`/dt-dem-vitals`](skills/dt-dem-vitals/SKILL.md) — Web Vitals Regression Brief ✅ Validated
+Diffs Core Web Vitals (INP, LCP, CLS, FCP, TTFB) between a baseline and compare window for a Dynatrace RUM application, applying material-delta thresholds to distinguish real regressions from noise. Classifies each regression as frontend-rendered, backend-bound, or network-bound by correlating regressed pages to specific XHR slowdowns and the responsible backend services via distributed trace attribution — ending "is it frontend or backend?" debates with evidence. Use after any deploy, for A/B variant rollout analysis, for Black Friday traffic shift comparisons, or for any customer conversation where a web vitals regression needs to be attributed to an owner team.
+
+#### [`/dt-k8s-podf`](skills/dt-k8s-podf/SKILL.md) — Kubernetes Pod Debug Forensics ✅ Validated
+Runs a parallel forensic investigation across K8s events, container logs, distributed traces, and applied NetworkPolicies for a given namespace and workload, then classifies the root cause into one of ten typed classes: OOMKilled, CrashLoopBackOff, ImagePullBackOff, probe failure, denied egress, DNS resolution failure, app exception, scheduling pressure, config drift, or inconclusive. The NetworkPolicy join is what differentiates this from `kubectl describe` — it surfaces "phantom errors" where an app throws connection refused or DNS failures because egress to a dependency is blocked, not because the app itself is broken. Produces either a PDF forensic report with a cause-class-specific Davis CoPilot runbook, or a deployable Dynatrace Notebook for self-service investigation.
+
+---
 
 ### Tier 2 — Specialized
 
-| Skill | Anchor | Output | Validated |
-|---|---|---|---|
-| [`/dt-cloud-cost`](skills/dt-cloud-cost/SKILL.md) | Cloud + scope + tag | FinOps attribution report (MD+PDF) | ✅ |
-| [`/dt-rum-journey`](skills/dt-rum-journey/SKILL.md) | RUM app + funnel steps + windows | User journey funnel diff (MD+PDF) | ✅ |
-| [`/dt-ai-obs`](skills/dt-ai-obs/SKILL.md) | LLM app + window + framework | LLM observability brief (MD+PDF) | ✅ |
+#### [`/dt-cloud-cost`](skills/dt-cloud-cost/SKILL.md) — Cloud Cost Attribution (FinOps) ✅ Validated
+Pulls AWS, Azure, or GCP cost data from the Dynatrace carbon-impact app bizevents, attributes spend to teams or projects by joining host entities to their Smartscape tag values, and computes period-over-period deltas to surface top movers, new initiatives, and decommissioned workloads. Produces a FinOps attribution report entirely within Dynatrace — no separate FinOps tool required — answering "who spent the most, who changed the most, and what's new this month" in one artifact. Use for monthly chargeback/showback reporting, budget anomaly triage, untagged spend audits (chargeback compliance gaps are surfaced explicitly), or cloud cost demos in `-clean` mode.
+
+#### [`/dt-rum-journey`](skills/dt-rum-journey/SKILL.md) — User Journey Funnel Diff ✅ Validated
+Diffs user journey conversion rates step-by-step between two time windows, pinpoints the biggest drop-off, identifies the most-frequent next action leakers took instead of progressing, and correlates the drop-off to backend errors using a differential rate comparison — leaker failure rate vs. progressor failure rate — to distinguish "backend errors caused the abandonment" from "backend errors that happen to everyone." Use for cart abandonment investigations, onboarding funnel regressions, deploy-induced UX breaks (via `--vs-deploy`), or A/B variant analysis where conversion impact needs to be measured with backend attribution.
+
+#### [`/dt-ai-obs`](skills/dt-ai-obs/SKILL.md) — LLM Application Observability Brief ✅ Validated
+Framework-aware observability brief for GenAI and LLM apps instrumented with OpenLLMetry, covering per-model latency (p50/p95/p99), token cost outliers with embedded pricing tables, agent-loop detection (repeated identical prompts within a session across both content-hash and step-frequency dimensions), and per-feature unit economics expressed as cost-per-request. Supports LangGraph, CrewAI, OpenAI SDK, and Anthropic SDK span attribute sets; unknown models and stale pricing are flagged rather than silently underreported. Use when an LLM cost bill spikes, an agent is running slow or stuck in a reflexion loop, you need to compare model ROI across frameworks, or you're sizing production capacity for a new LLM feature.
 
 ---
 
@@ -171,9 +188,9 @@ ANCHOR ──▶ Phase 0a: parse args
 
 **Key design principles:**
 - Workers never authenticate — orchestrator-only auth via on-disk token
-- Workers read ONE reference file from dynatrace-for-ai at start — DQL stays current
-- Absence-gate prevents false "no data" findings
-- All skills are reference-driven — no hardcoded DQL
+- Workers read ONE reference file from dynatrace-for-ai at start — DQL stays current without drift
+- Absence-gate prevents false "no data" findings — every absence claim requires unfiltered proof
+- All skills are reference-driven — no hardcoded DQL in the skill files themselves
 
 ---
 
@@ -190,7 +207,7 @@ All 8 Tier 1/2 skills were validated against a live Dynatrace tenant (2026-05-28
 | 5 | UserAction names match on `interaction.name`, not `user_action.name` |
 | 6 | Use `--default-timeframe-start/--default-timeframe-end` on `dtctl query` to inject windows — never mutate the DQL string |
 
-See [SKILLS_REFERENCE.md](SKILLS_REFERENCE.md) for the full detailed reference.
+See [SKILLS_REFERENCE.md](SKILLS_REFERENCE.md) for the full detailed reference with design rationale, real-world use cases, and substrate notes per skill.
 
 ---
 
