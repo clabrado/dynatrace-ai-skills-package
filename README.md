@@ -1,8 +1,8 @@
 # Dynatrace AI Skills Package
 
-A collection of Claude Code skills for proactive, agentic observability on Dynatrace — authored and tenant-validated by Chris LaBrado, Lead Solutions Engineer.
+A collection of AI agent skills for proactive, agentic observability on Dynatrace — compatible with **Claude Code**, **GitHub Copilot**, **OpenAI Codex**, and any MCP-compatible AI client. Authored and tenant-validated by Chris LaBrado, Lead Solutions Engineer, Dynatrace.
 
-These skills compose Dynatrace telemetry (spans, logs, metrics, events, bizevents, RUM, AppSec, SLOs) with agentic parallel workers and Davis CoPilot synthesis to produce polished MD+PDF artifacts, deployed notebooks, and deployed dashboards — all from a single slash command.
+These skills compose Dynatrace telemetry (spans, logs, metrics, events, bizevents, RUM, AppSec, SLOs) with agentic parallel workers and Davis CoPilot synthesis to produce polished MD+PDF artifacts, deployed notebooks, and deployed dashboards — all from a single slash command. Each skill follows a reference-driven architecture: workers read one targeted DQL reference file at runtime, so queries stay current without hardcoding.
 
 ---
 
@@ -128,7 +128,7 @@ cp -r dynatrace-ai-skills-package/skills/* ~/.claude/skills/
 ls ~/.claude/skills/ | grep dt-
 ```
 
-> **Note:** Skills are `.md` files inside named directories. Claude Code auto-discovers them from `~/.claude/skills/`.
+> **Note:** Skills are `.md` files inside named directories. Claude Code and other MCP-compatible AI clients auto-discover them from `~/.claude/skills/` or the equivalent configured skills directory.
 
 ---
 
