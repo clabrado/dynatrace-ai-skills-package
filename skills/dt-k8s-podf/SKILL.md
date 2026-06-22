@@ -76,10 +76,10 @@ the dt-k8s-podf scoping below.
 
 | Worker | Reference file(s) (read ONCE at worker start) |
 |---|---|
-| W-events | `~/.claude/skills/dt-obs-kubernetes/references/workload-health.md` (+ `pod-debugging.md` for OOM/probe/eviction patterns) |
-| W-logs   | `~/.claude/skills/dt-obs-logs/SKILL.md` |
-| W-traces | `~/.claude/skills/dt-obs-tracing/references/failure-detection.md` (+ `http-spans.md` / `rpc-spans.md` / `database-spans.md` based on detected protocol) |
-| W-network | `~/.claude/skills/dt-obs-kubernetes/references/network-policies.md` (+ `labels-annotations.md` for owner/team resolution) |
+| W-events | `~/.agents/skills/dt-obs-kubernetes/references/workload-health.md` (+ `pod-debugging.md` for OOM/probe/eviction patterns) |
+| W-logs   | `~/.agents/skills/dt-obs-logs/SKILL.md` |
+| W-traces | `~/.agents/skills/dt-obs-tracing/references/failure-detection.md` (+ `http-spans.md` / `rpc-spans.md` / `database-spans.md` based on detected protocol) |
+| W-network | `~/.agents/skills/dt-obs-kubernetes/references/network-policies.md` (+ `labels-annotations.md` for owner/team resolution) |
 
 **Inheritance:** Phase 1.14 sanitization, all PDF generation, Mermaid syntax,
 diagram sizing, and dtctl auth hygiene are **identical to `/dt-rca` and
@@ -101,41 +101,41 @@ time.
 
 | File | Purpose | When to read |
 |------|---------|--------------|
-| `~/.claude/skills/dtctl/references/DQL-reference.md` | Core DQL syntax, filter patterns | Always (Phase 0c) |
-| `~/.claude/skills/dt-dql-essentials/references/dql/dql-functions-smartscape.md` | smartscapeNodes / getNodeName / getNodeField | Always (Phase 0c) |
+| `~/.agents/skills/dtctl/references/DQL-reference.md` | Core DQL syntax, filter patterns | Always (Phase 0c) |
+| `~/.agents/skills/dt-dql-essentials/references/dql/dql-functions-smartscape.md` | smartscapeNodes / getNodeName / getNodeField | Always (Phase 0c) |
 
 ### W-events — dt-obs-kubernetes
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-kubernetes/SKILL.md` | Always |
-| `~/.claude/skills/dt-obs-kubernetes/references/workload-health.md` | Always — Deployment/StatefulSet/DaemonSet health, restart trends |
-| `~/.claude/skills/dt-obs-kubernetes/references/pod-debugging.md` | Always — OOMKilled, CrashLoopBackOff, probe failures, eviction reasons |
-| `~/.claude/skills/dt-obs-kubernetes/references/labels-annotations.md` | Always — owner/team resolution via labels |
-| `~/.claude/skills/dt-obs-kubernetes/references/pod-node-placement.md` | If FailedScheduling events appear |
+| `~/.agents/skills/dt-obs-kubernetes/SKILL.md` | Always |
+| `~/.agents/skills/dt-obs-kubernetes/references/workload-health.md` | Always — Deployment/StatefulSet/DaemonSet health, restart trends |
+| `~/.agents/skills/dt-obs-kubernetes/references/pod-debugging.md` | Always — OOMKilled, CrashLoopBackOff, probe failures, eviction reasons |
+| `~/.agents/skills/dt-obs-kubernetes/references/labels-annotations.md` | Always — owner/team resolution via labels |
+| `~/.agents/skills/dt-obs-kubernetes/references/pod-node-placement.md` | If FailedScheduling events appear |
 
 ### W-logs — dt-obs-logs
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-logs/SKILL.md` | Always |
+| `~/.agents/skills/dt-obs-logs/SKILL.md` | Always |
 
 ### W-traces — dt-obs-tracing
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-tracing/SKILL.md` | Always |
-| `~/.claude/skills/dt-obs-tracing/references/failure-detection.md` | Always — failure reason taxonomy, exception sources |
-| `~/.claude/skills/dt-obs-tracing/references/http-spans.md` | If sample span shows `http.request.method` |
-| `~/.claude/skills/dt-obs-tracing/references/rpc-spans.md` | If sample span shows `rpc.system` |
-| `~/.claude/skills/dt-obs-tracing/references/database-spans.md` | If sample span shows `db.system` (outbound dep slowness) |
+| `~/.agents/skills/dt-obs-tracing/SKILL.md` | Always |
+| `~/.agents/skills/dt-obs-tracing/references/failure-detection.md` | Always — failure reason taxonomy, exception sources |
+| `~/.agents/skills/dt-obs-tracing/references/http-spans.md` | If sample span shows `http.request.method` |
+| `~/.agents/skills/dt-obs-tracing/references/rpc-spans.md` | If sample span shows `rpc.system` |
+| `~/.agents/skills/dt-obs-tracing/references/database-spans.md` | If sample span shows `db.system` (outbound dep slowness) |
 
 ### W-network — dt-obs-kubernetes
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-kubernetes/references/network-policies.md` | Always — applied policies, deny events |
-| `~/.claude/skills/dt-obs-kubernetes/references/ingress.md` | If workload is Ingress-fronted (detected via labels) |
+| `~/.agents/skills/dt-obs-kubernetes/references/network-policies.md` | Always — applied policies, deny events |
+| `~/.agents/skills/dt-obs-kubernetes/references/ingress.md` | If workload is Ingress-fronted (detected via labels) |
 
 ---
 
@@ -592,7 +592,7 @@ RETURN only the PhaseResult JSON schema (no prose). Nothing else.
 
 #### W-events — Kubernetes Events Worker
 
-**REFERENCES:** `~/.claude/skills/dt-obs-kubernetes/references/workload-health.md`
+**REFERENCES:** `~/.agents/skills/dt-obs-kubernetes/references/workload-health.md`
 and `pod-debugging.md`. Also read `labels-annotations.md` for owner enrichment
 if `OWNER_TEAM == null` in DispatchContext.
 
@@ -715,7 +715,7 @@ fetch dt.entity.cloud_application
 
 #### W-logs — Container Logs Worker
 
-**REFERENCE:** `~/.claude/skills/dt-obs-logs/SKILL.md`.
+**REFERENCE:** `~/.agents/skills/dt-obs-logs/SKILL.md`.
 
 **dt-k8s-podf scoping** (NOT in the reference — CRITICAL):
 - Filter on `timestamp` (NOT `start_time`)
@@ -810,7 +810,7 @@ fetch logs, from:now()-{SCAN_HOURS}h
 
 **Skip if `SPAN_PRESENCE == false` in DispatchContext.**
 
-**REFERENCE:** `~/.claude/skills/dt-obs-tracing/references/failure-detection.md`.
+**REFERENCE:** `~/.agents/skills/dt-obs-tracing/references/failure-detection.md`.
 Additionally read the protocol-specific reference based on the sample span from
 Q5 below — `http-spans.md` if `http.request.method` present, `rpc-spans.md` if
 `rpc.system` present, `database-spans.md` if `db.system` present (outbound dep
@@ -910,7 +910,7 @@ fetch spans, from:now()-1h
 #### W-network — NetworkPolicy + Egress Worker
 
 **REFERENCES:**
-`~/.claude/skills/dt-obs-kubernetes/references/network-policies.md` and
+`~/.agents/skills/dt-obs-kubernetes/references/network-policies.md` and
 `labels-annotations.md` (for selector matching).
 
 **Purpose:** surface applied NetworkPolicies and any policy-denial events

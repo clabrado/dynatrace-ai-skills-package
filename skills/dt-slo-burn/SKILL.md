@@ -60,10 +60,10 @@ derives queries with dt-slo-burn scoping applied.
 
 | Phase | Reference file (read ONCE at worker start) |
 |---|---|
-| W-burn         | `~/.claude/skills/dt-obs-services/references/service-metrics.md` (RED metric patterns, error-rate + failure_count) |
-| W-contributors | `~/.claude/skills/dt-obs-services/references/service-metrics.md` (group-by endpoint / k8s.workload / consumer dimensions) |
-| W-davis        | `~/.claude/skills/dt-obs-problems/references/problem-correlation.md` (active-problem filter, scoped to affected entities) |
-| W-forecast     | `~/.claude/skills/dt-obs-predictive-analytics/references/forecasting-analyzer.md` (timeseries-forecast tool reference, sizing rules) |
+| W-burn         | `~/.agents/skills/dt-obs-services/references/service-metrics.md` (RED metric patterns, error-rate + failure_count) |
+| W-contributors | `~/.agents/skills/dt-obs-services/references/service-metrics.md` (group-by endpoint / k8s.workload / consumer dimensions) |
+| W-davis        | `~/.agents/skills/dt-obs-problems/references/problem-correlation.md` (active-problem filter, scoped to affected entities) |
+| W-forecast     | `~/.agents/skills/dt-obs-predictive-analytics/references/forecasting-analyzer.md` (timeseries-forecast tool reference, sizing rules) |
 
 ---
 
@@ -541,7 +541,7 @@ NO_TRAFFIC short-circuits to the NO TRAFFIC banner in Phase 1.5).
 
 #### W-contributors — Top Contributors
 
-**REFERENCE-DRIVEN — read `~/.claude/skills/dt-obs-services/references/service-metrics.md`
+**REFERENCE-DRIVEN — read `~/.agents/skills/dt-obs-services/references/service-metrics.md`
 ONCE** (› "Failure Analysis", "k8s.workload group-by" examples). Apply dt-slo-burn scoping.
 
 **dt-slo-burn scoping for EVERY query:** the same `SLO_FILTER` Smartscape scope; spans use
@@ -616,7 +616,7 @@ ONCE** (› "Failure Analysis", "k8s.workload group-by" examples). Apply dt-slo-
 
 #### W-davis — Active Davis Problems on SLO-affected Entities
 
-**REFERENCE-DRIVEN — read `~/.claude/skills/dt-obs-problems/references/problem-correlation.md`
+**REFERENCE-DRIVEN — read `~/.agents/skills/dt-obs-problems/references/problem-correlation.md`
 ONCE** (› active-problem filter pattern, scoped filter on affected entities). Apply
 dt-slo-burn scoping.
 
@@ -668,7 +668,7 @@ fetch dt.davis.problems, from:now()-{BURN_HORIZON}
 #### W-forecast (Conditional — only if `FORECAST_MODE == true`)
 
 **REFERENCE-DRIVEN — read
-`~/.claude/skills/dt-obs-predictive-analytics/references/forecasting-analyzer.md` ONCE**
+`~/.agents/skills/dt-obs-predictive-analytics/references/forecasting-analyzer.md` ONCE**
 (› "Tool Reference: timeseries-forecast", "Interval / Horizon Sizing"). Use the
 `timeseries-forecast` tool to project burn-rate forward.
 

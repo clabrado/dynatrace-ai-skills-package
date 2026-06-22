@@ -67,10 +67,10 @@ upstream; this skill stays correct automatically.
 
 | Phase | Reference file (read ONCE at worker start) |
 |---|---|
-| W-red          | `~/.claude/skills/dt-obs-services/references/service-metrics.md` + runtime ref (java.md / nodejs.md / etc., auto-detected) |
-| W-exceptions   | `~/.claude/skills/dt-obs-tracing/references/failure-detection.md` |
-| W-logs         | `~/.claude/skills/dt-obs-logs/SKILL.md` |
-| W-deps         | `~/.claude/skills/dt-obs-tracing/references/failure-detection.md` (outbound client-span patterns) |
+| W-red          | `~/.agents/skills/dt-obs-services/references/service-metrics.md` + runtime ref (java.md / nodejs.md / etc., auto-detected) |
+| W-exceptions   | `~/.agents/skills/dt-obs-tracing/references/failure-detection.md` |
+| W-logs         | `~/.agents/skills/dt-obs-logs/SKILL.md` |
+| W-deps         | `~/.agents/skills/dt-obs-tracing/references/failure-detection.md` (outbound client-span patterns) |
 
 ---
 
@@ -90,40 +90,40 @@ empty rows from a filter on the frequently-empty `dt.process_group.id`.
 
 | File | Purpose | When to read |
 |------|---------|--------------|
-| `~/.claude/skills/dtctl/references/DQL-reference.md` | Core DQL syntax | Orchestrator (Phase 0c) |
-| `~/.claude/skills/dt-dql-essentials/references/dql/dql-functions-smartscape.md` | smartscapeNodes / getNodeName signatures | Orchestrator (Phase 0c) |
+| `~/.agents/skills/dtctl/references/DQL-reference.md` | Core DQL syntax | Orchestrator (Phase 0c) |
+| `~/.agents/skills/dt-dql-essentials/references/dql/dql-functions-smartscape.md` | smartscapeNodes / getNodeName signatures | Orchestrator (Phase 0c) |
 
 ### W-red — dt-obs-services
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-services/SKILL.md` | Always |
-| `~/.claude/skills/dt-obs-services/references/service-metrics.md` | Always — RED metric patterns |
-| `~/.claude/skills/dt-obs-services/references/java.md` | RUNTIME == java OR unknown |
-| `~/.claude/skills/dt-obs-services/references/nodejs.md` | RUNTIME == nodejs |
-| `~/.claude/skills/dt-obs-services/references/dotnet.md` | RUNTIME == dotnet |
-| `~/.claude/skills/dt-obs-services/references/python.md` | RUNTIME == python |
-| `~/.claude/skills/dt-obs-services/references/php.md` | RUNTIME == php |
-| `~/.claude/skills/dt-obs-services/references/go.md` | RUNTIME == go |
+| `~/.agents/skills/dt-obs-services/SKILL.md` | Always |
+| `~/.agents/skills/dt-obs-services/references/service-metrics.md` | Always — RED metric patterns |
+| `~/.agents/skills/dt-obs-services/references/java.md` | RUNTIME == java OR unknown |
+| `~/.agents/skills/dt-obs-services/references/nodejs.md` | RUNTIME == nodejs |
+| `~/.agents/skills/dt-obs-services/references/dotnet.md` | RUNTIME == dotnet |
+| `~/.agents/skills/dt-obs-services/references/python.md` | RUNTIME == python |
+| `~/.agents/skills/dt-obs-services/references/php.md` | RUNTIME == php |
+| `~/.agents/skills/dt-obs-services/references/go.md` | RUNTIME == go |
 
 ### W-exceptions — dt-obs-tracing
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-tracing/SKILL.md` | Always |
-| `~/.claude/skills/dt-obs-tracing/references/failure-detection.md` | Always — exception + failure reason patterns |
+| `~/.agents/skills/dt-obs-tracing/SKILL.md` | Always |
+| `~/.agents/skills/dt-obs-tracing/references/failure-detection.md` | Always — exception + failure reason patterns |
 
 ### W-logs — dt-obs-logs
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-logs/SKILL.md` | Always |
+| `~/.agents/skills/dt-obs-logs/SKILL.md` | Always |
 
 ### W-deps — dt-obs-tracing
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-tracing/references/failure-detection.md` | Always — outbound client-span latency + failure patterns |
+| `~/.agents/skills/dt-obs-tracing/references/failure-detection.md` | Always — outbound client-span latency + failure patterns |
 
 ---
 
@@ -651,7 +651,7 @@ RETURN only this PhaseResult shape (JSON). Nothing else.
 #### W-red — RED metrics delta (rate, errors, duration)
 
 **REFERENCE-DRIVEN — dt-deploy-risk carries NO RED DQL; dt-obs-services is
-the authority.** Read `~/.claude/skills/dt-obs-services/references/service-metrics.md`
+the authority.** Read `~/.agents/skills/dt-obs-services/references/service-metrics.md`
 ONCE plus the runtime file for the detected RUNTIME
 (`java.md` / `nodejs.md` / `dotnet.md` / `python.md` / `php.md` / `go.md`).
 Take the patterns; apply the delta-comparison scoping below.
@@ -735,7 +735,7 @@ Take the patterns; apply the delta-comparison scoping below.
 
 #### W-exceptions — new exception types (set-difference)
 
-**REFERENCE-DRIVEN — read `~/.claude/skills/dt-obs-tracing/references/failure-detection.md`
+**REFERENCE-DRIVEN — read `~/.agents/skills/dt-obs-tracing/references/failure-detection.md`
 ONCE.** Take the exception-extraction patterns; apply the delta-comparison
 scoping below.
 
@@ -803,7 +803,7 @@ For each type in NEW_TYPES: report count_in_post + sample_trace_id.
 
 #### W-logs — new error / warn log patterns (set-difference)
 
-**REFERENCE-DRIVEN — read `~/.claude/skills/dt-obs-logs/SKILL.md` ONCE**
+**REFERENCE-DRIVEN — read `~/.agents/skills/dt-obs-logs/SKILL.md` ONCE**
 (sections: "Log Searching", "Log Filtering", "Pattern Analysis").
 
 **dt-deploy-risk MUST-KEEPS (critical — not in the reference):**
@@ -879,7 +879,7 @@ For each pattern in NEW_PATTERNS: report count_in_post + sample_content (truncat
 
 #### W-deps — downstream dependency health delta
 
-**REFERENCE-DRIVEN — read `~/.claude/skills/dt-obs-tracing/references/failure-detection.md`
+**REFERENCE-DRIVEN — read `~/.agents/skills/dt-obs-tracing/references/failure-detection.md`
 ONCE.** Take the outbound client-span patterns; apply delta scoping.
 
 **Queries to run (ALL in one parallel batch — BASELINE + POST):**

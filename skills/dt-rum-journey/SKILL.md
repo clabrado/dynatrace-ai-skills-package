@@ -87,9 +87,9 @@ reads ONE targeted reference at start, ONCE per subagent, then derives queries.
 
 | Worker | Reference files (read ONCE at worker start) |
 |---|---|
-| W-funnel | `~/.claude/skills/dt-obs-frontends/SKILL.md` + `references/UserAction.md` + `references/PageViewAnalysis.md` + `references/user-sessions.md` |
-| W-dropoff | `~/.claude/skills/dt-obs-frontends/references/NavigationPatterns.md` + `references/UserAction.md` |
-| W-attribution | `~/.claude/skills/dt-obs-tracing/references/request-attributes.md` + `references/entity-lookups.md` |
+| W-funnel | `~/.agents/skills/dt-obs-frontends/SKILL.md` + `references/UserAction.md` + `references/PageViewAnalysis.md` + `references/user-sessions.md` |
+| W-dropoff | `~/.agents/skills/dt-obs-frontends/references/NavigationPatterns.md` + `references/UserAction.md` |
+| W-attribution | `~/.agents/skills/dt-obs-tracing/references/request-attributes.md` + `references/entity-lookups.md` |
 
 **Sanitization, URL format, Mermaid/ASCII diagram rules, and PDF generation:** identical to
 `/dt-rca` — read `~/.claude/skills/dt-rca/SKILL.md` sections "Phase 1.14", "Phase 3",
@@ -430,7 +430,7 @@ RETURN only this PhaseResult shape (JSON). Nothing else.
 
 #### W-funnel — Per-step session counts + conversion
 
-**REFERENCE-DRIVEN.** Read `~/.claude/skills/dt-obs-frontends/SKILL.md` ›
+**REFERENCE-DRIVEN.** Read `~/.agents/skills/dt-obs-frontends/SKILL.md` ›
 "Event Characteristics" + "Session Data", `references/PageViewAnalysis.md` ›
 "Page Views Overview", `references/UserAction.md` › "User Action Overview" and
 "Actions by Interaction", `references/user-sessions.md` › "Core Session Metrics". Take the
@@ -531,7 +531,7 @@ Compute and report (in PhaseResult):
 
 #### W-dropoff — What did leakers do instead?
 
-**REFERENCE-DRIVEN.** Read `~/.claude/skills/dt-obs-frontends/references/NavigationPatterns.md` ›
+**REFERENCE-DRIVEN.** Read `~/.agents/skills/dt-obs-frontends/references/NavigationPatterns.md` ›
 "Internal Navigation Flows" + "Page Reload Analysis" and `references/UserAction.md` ›
 "Interrupted Actions" + "Timed-Out Actions". Apply the dt-rum-journey scoping.
 
@@ -638,7 +638,7 @@ fetch user.events, from:toTimestamp("{COMPARE.from}"), to:toTimestamp("{COMPARE.
 
 #### W-attribution — Backend correlation for leakers
 
-**REFERENCE-DRIVEN.** Read `~/.claude/skills/dt-obs-tracing/references/request-attributes.md`
+**REFERENCE-DRIVEN.** Read `~/.agents/skills/dt-obs-tracing/references/request-attributes.md`
 (for `dt.rum.session.id` and `dt.rum.trace_id` on spans) and `references/entity-lookups.md`
 (for `getNodeName(dt.smartscape.service)` on spans). Apply dt-rum-journey scoping.
 

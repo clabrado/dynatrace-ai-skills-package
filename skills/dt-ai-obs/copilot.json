@@ -1,0 +1,8 @@
+{
+  "name": "dt-ai-obs",
+  "copilot_integration": true,
+  "source": "local",
+  "read_claude_dirs": false,
+  "description": "Copilot skill stub for dt-ai-obs. Do not read from claude directories.",
+  "entrypoint": "SKILL.md"
+}

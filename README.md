@@ -6,6 +6,10 @@ These skills compose Dynatrace telemetry (spans, logs, metrics, events, bizevent
 
 ---
 
+## Setup
+
+Point your AI assistant at this repo and say **"set this up"**. Guided by `CLAUDE.md`, Claude enters **plan mode**, shows the catalog, and lets you **pick specific skills or choose "all"** — presenting a plan for approval before anything is installed.
+
 ## Skill Catalog
 
 ### Incident-Anchored Skills
@@ -52,6 +56,29 @@ Diffs user journey conversion rates step-by-step between two time windows, pinpo
 Framework-aware observability brief for GenAI and LLM apps instrumented with OpenLLMetry, covering per-model latency (p50/p95/p99), token cost outliers with embedded pricing tables, agent-loop detection (repeated identical prompts within a session across both content-hash and step-frequency dimensions), and per-feature unit economics expressed as cost-per-request. Supports LangGraph, CrewAI, OpenAI SDK, and Anthropic SDK span attribute sets; unknown models and stale pricing are flagged rather than silently underreported. Use when an LLM cost bill spikes, an agent is running slow or stuck in a reflexion loop, you need to compare model ROI across frameworks, or you're sizing production capacity for a new LLM feature.
 
 ---
+
+
+### Foundations & Building Blocks (added 2026-06-22)
+
+Lower-level query and builder skills the analysis suite composes on — observability data access, dashboard/notebook builders, DQL guidance, and cloud governance.
+
+- [`/dt-obs-hosts`](skills/dt-obs-hosts/SKILL.md) — Host and process metrics including CPU, memory, disk, network, containers, and process-level telemetry.
+- [`/dt-obs-services`](skills/dt-obs-services/SKILL.md) — Service performance monitoring with RED metrics (Rate, Errors, Duration) and runtime-specific telemetry for Java, .NET, Node.js, Python, PHP, and Go.
+- [`/dt-obs-logs`](skills/dt-obs-logs/SKILL.md) — Log querying, filtering, pattern analysis, and error rate calculation.
+- [`/dt-obs-tracing`](skills/dt-obs-tracing/SKILL.md) — Distributed traces, spans, service dependencies, and request flow analysis.
+- [`/dt-obs-problems`](skills/dt-obs-problems/SKILL.md) — DAVIS problem analysis including root cause identification, impact assessment, and correlation with other telemetry.
+- [`/dt-obs-kubernetes`](skills/dt-obs-kubernetes/SKILL.md) — Kubernetes cluster, pod, node, and workload monitoring.
+- [`/dt-obs-aws`](skills/dt-obs-aws/SKILL.md) — AWS cloud resource monitoring including EC2, RDS, Lambda, ECS/EKS, VPC networking, load balancers, S3, DynamoDB, SQS/SNS, and cost optimization.
+- [`/dt-obs-azure`](skills/dt-obs-azure/SKILL.md) — Azure cloud resources including VMs, VMSS, SQL Database, Storage, AKS, App Service, Functions, VNet networking, load balancers, Event Hubs, Container Apps,…
+- [`/dt-obs-gcp`](skills/dt-obs-gcp/SKILL.md) — GCP cloud resources including Compute Engine, GKE, Cloud Run, Pub/Sub, VPC networking, DNS, IAM, Secret Manager, and monitoring.
+- [`/dt-obs-frontends`](skills/dt-obs-frontends/SKILL.md) — Real User Monitoring (RUM), Web Vitals, user sessions, mobile crashes, page performance, user interactions, and frontend errors.
+- [`/dt-obs-log-parser`](skills/dt-obs-log-parser/SKILL.md) — Log pattern detection, DQL parse statement generation, and OpenPipeline processing rule deployment.
+- [`/dt-obs-predictive-analytics`](skills/dt-obs-predictive-analytics/SKILL.md) — Predictive analytics for Dynatrace — time series forecasting with the timeseries-forecast tool, capacity saturation planning, trend and anomaly detection a…
+- [`/dt-dql-essentials`](skills/dt-dql-essentials/SKILL.md) — Core DQL syntax rules, common pitfalls, and query patterns.
+- [`/dt-app-dashboards`](skills/dt-app-dashboards/SKILL.md) — Work with Dynatrace dashboards - create, modify, query, and analyze dashboard JSON including tiles, layouts, DQL queries, variables, and visualizations.
+- [`/dt-app-notebooks`](skills/dt-app-notebooks/SKILL.md) — Work with Dynatrace notebooks - create, modify, query, and analyze notebook JSON.
+- [`/dt-migration`](skills/dt-migration/SKILL.md) — Migrate Dynatrace classic and Gen2 entity-based DQL to Smartscape equivalents.
+- [`/dt-cloud-compliance`](skills/dt-cloud-compliance/SKILL.md) — Verify Dynatrace internal cloud resource compliance after any cloud work.
 
 ## ⚠️ 2026-06-03 UPDATE — change notes
 
