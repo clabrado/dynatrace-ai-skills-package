@@ -6,6 +6,10 @@ These skills compose Dynatrace telemetry (spans, logs, metrics, events, bizevent
 
 ---
 
+## Setup
+
+Point your AI assistant at this repo and say **"set this up"**. Guided by `CLAUDE.md`, Claude enters **plan mode**, shows the catalog, and lets you **pick specific skills or choose "all"** — presenting a plan for approval before anything is installed.
+
 ## Skill Catalog
 
 ### Incident-Anchored Skills
