@@ -81,10 +81,10 @@ framework attribute set), and reports back.
 
 | Worker     | Reference file (read ONCE at worker start) |
 |------------|--------------------------------------------|
-| W-latency  | `~/.claude/skills/dt-obs-tracing/references/performance-analysis.md` + `request-attributes.md` |
-| W-cost     | `~/.claude/skills/dt-obs-tracing/references/request-attributes.md` |
-| W-loops    | `~/.claude/skills/dt-obs-tracing/references/request-attributes.md` |
-| W-econ     | `~/.claude/skills/dt-obs-tracing/references/request-attributes.md` + `~/.claude/skills/dt-obs-services/references/service-metrics.md` |
+| W-latency  | `~/.agents/skills/dt-obs-tracing/references/performance-analysis.md` + `request-attributes.md` |
+| W-cost     | `~/.agents/skills/dt-obs-tracing/references/request-attributes.md` |
+| W-loops    | `~/.agents/skills/dt-obs-tracing/references/request-attributes.md` |
+| W-econ     | `~/.agents/skills/dt-obs-tracing/references/request-attributes.md` + `~/.agents/skills/dt-obs-services/references/service-metrics.md` |
 
 The orchestrator carries no inline DQL except Phase 0b bootstrap and Phase 1.5
 Absence-Gate confirmation queries.
@@ -563,7 +563,7 @@ RETURN only the PhaseResult JSON shape. Nothing else. Cap at ~4KB.
 
 #### W-latency — per-prompt latency
 
-**Reference:** `~/.claude/skills/dt-obs-tracing/references/performance-analysis.md`
+**Reference:** `~/.agents/skills/dt-obs-tracing/references/performance-analysis.md`
 (percentile / makeTimeseries patterns) + `request-attributes.md` (request-
 level aggregation).
 
@@ -649,7 +649,7 @@ fetch spans, from:toTimestamp("{WINDOW.from}"), to:toTimestamp("{WINDOW.to}")
 
 #### W-cost — token cost outliers
 
-**Reference:** `~/.claude/skills/dt-obs-tracing/references/request-attributes.md`
+**Reference:** `~/.agents/skills/dt-obs-tracing/references/request-attributes.md`
 (request-level aggregation, custom attribute access).
 
 **Goal:** cost per span / per model / per step. Identify the top-N most
@@ -763,7 +763,7 @@ follow the 3-tier resolution order):**
 
 #### W-loops — agent-loop detection
 
-**Reference:** `~/.claude/skills/dt-obs-tracing/references/request-attributes.md`
+**Reference:** `~/.agents/skills/dt-obs-tracing/references/request-attributes.md`
 (request aggregation, custom attribute access).
 
 **Goal:** within a single session / conversation, detect repeated identical
@@ -873,9 +873,9 @@ For crewai, swap `langgraph.node` → `crewai.task.id`. For openai/anthropic
 
 #### W-econ — per-feature unit economics ($/feature)
 
-**Reference:** `~/.claude/skills/dt-obs-tracing/references/request-attributes.md`
+**Reference:** `~/.agents/skills/dt-obs-tracing/references/request-attributes.md`
 (custom `request_attribute.*` access) +
-`~/.claude/skills/dt-obs-services/references/service-metrics.md` (RED metric
+`~/.agents/skills/dt-obs-services/references/service-metrics.md` (RED metric
 patterns for per-feature request counts).
 
 **Goal:** group LLM cost by a `feature.name` (or fallback) custom request

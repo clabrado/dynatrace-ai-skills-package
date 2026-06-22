@@ -1,0 +1,1129 @@
+---
+name: dt-rcf
+description: >-
+  Root Cause Forensics (RCF) — agentic, multi-entry forensic investigation for Dynatrace.
+  Unlike /dt-rca which requires a Davis Problem ID, dt-rcf accepts any forensic anchor:
+  Problem ID, service name, time window, trace ID, or error pattern. Dispatches parallel
+  forensic workers (dt-obs-problems, dt-obs-tracing, dt-obs-logs, dt-obs-services), builds
+  a ranked hypothesis graph with confidence scores, synthesizes via Davis CoPilot, and
+  generates a polished MD+PDF forensic report. Use when you need deep RCA, when Davis
+  hasn't fired yet, or when the investigation spans multiple services without a clear
+  Problem ID anchor.
+---
+
+# dt-rcf — Dynatrace Root Cause Forensics
+
+Agentic forensic investigation skill. Accepts any forensic anchor, dispatches parallel
+phase workers backed by maintained DQL sub-skills, builds a ranked evidence hypothesis
+graph, and produces a complete forensic report (Markdown + PDF).
+
+---
+
+## Usage
+
+```
+/dt-rcf P-26012752                                    # Problem ID anchor
+/dt-rcf SERVICE:"checkout-api"                        # Service name anchor
+/dt-rcf FROM:"2026-05-18T14:00Z" TO:"2026-05-18T15:00Z"  # Time window anchor
+/dt-rcf TRACE:"a1b2c3d4e5f6"                         # Trace ID anchor
+/dt-rcf ERROR:"connection pool exhausted"             # Error pattern anchor
+/dt-rcf P-26012752 -clean                             # Sanitized report
+/dt-rcf SERVICE:"order-api" -clean --review           # With reviewer gate
+```
+
+## Arguments
+
+- `$ARGUMENTS` — at least one forensic anchor (see types below)
+- `-clean` — sanitize all identifying names (same rules as /dt-rca)
+- `--review` — add a reviewer subagent quality gate before saving the report
+
+## Sub-Skills Loaded Per Phase
+
+This skill delegates DQL authority to four maintained sub-skills. Do NOT
+hardcode DQL that is covered by these references — load the reference; use
+its pattern.
+
+| Phase | Sub-skill path |
+|---|---|
+| W-problems | `~/.agents/skills/dt-obs-problems/SKILL.md` + `references/` |
+| W-tracing  | `~/.agents/skills/dt-obs-tracing/SKILL.md` + `references/failure-detection.md`, `references/http-spans.md`, `references/database-spans.md` |
+| W-logs     | `~/.agents/skills/dt-obs-logs/SKILL.md` |
+| W-services | `~/.agents/skills/dt-obs-services/SKILL.md` + runtime-specific reference (auto-detected) |
+
+**Sanitization, URL format, Mermaid/ASCII diagram rules, and PDF generation:**
+These are identical to `/dt-rca`. Read `~/.claude/skills/dt-rca/SKILL.md` sections
+"Phase 1.14", "Phase 3", "Phase 4", "PDF DIAGRAM RULES", "MERMAID SYNTAX RULES", and
+"DIAGRAM SIZING RULES" — all apply unchanged.
+
+---
+
+## ENTITY MODEL — SMARTSCAPE-NATIVE (NON-NEGOTIABLE)
+
+`classicEntitySelector()` is explicitly deprecated. The four sub-skills use zero
+`dt.entity.*` references. dt-rcf MUST use the Smartscape model throughout.
+
+### Span / Log / Event Filtering
+
+```dql
+-- Filter spans to a specific service (use Smartscape, NOT dt.entity.service ==)
+fetch spans
+| filter dt.smartscape.service in [
+    smartscapeNodes SERVICE
+    | filter id == "{SERVICE_ENTITY_ID}"
+    | fields id
+]
+
+-- Filter logs to a specific service
+fetch logs
+| filter dt.smartscape_source.id in [
+    smartscapeNodes SERVICE
+    | filter id == "{SERVICE_ENTITY_ID}"
+    | fields id
+]
+
+-- Filter events to a specific host
+fetch events
+| filter dt.smartscape_source.id in [
+    smartscapeNodes HOST
+    | filter id == "{HOST_ENTITY_ID}"
+    | fields id
+]
+```
+
+### Entity Name & Metadata Resolution
+
+```dql
+-- Resolve service name on spans (preferred over fetch dt.entity.service)
+fetch spans
+| fieldsAdd service_name = getNodeName(dt.smartscape.service)
+
+-- Resolve host name + hardware on spans
+fetch spans
+| fieldsAdd host_name = getNodeName(dt.smartscape.host),
+            getNodeField(dt.smartscape.host, "bitness"),
+            getNodeField(dt.smartscape.host, "additionalSystemInfo")
+
+-- Look up host metadata directly
+smartscapeNodes HOST
+| filter id == "{HOST_ENTITY_ID}"
+| fields name, properties
+
+-- Look up service metadata directly
+smartscapeNodes SERVICE
+| filter id == "{SERVICE_ENTITY_ID}"
+| fields name, properties
+```
+
+### Timeseries Metrics (JVM / Process)
+
+```dql
+-- Per java.md: group by Smartscape process node, NOT filter by dt.entity.process_group_instance
+timeseries gc_count = avg(dt.runtime.jvm.gc.collection_count),
+           by: {dt.smartscape.process, dt.process_group.id}
+```
+
+### Process Group Metadata (Legacy Gap)
+
+`fetch dt.entity.process_group` has no Smartscape equivalent for `softwareTechnologies`
+and `COMMAND_LINE_ARGS` metadata. Use it only for this specific purpose and document
+it in the report as a legacy query:
+
+```dql
+-- LEGACY — only for softwareTechnologies/command-line metadata (no Smartscape equivalent)
+fetch dt.entity.process_group
+| filter id == "{PROCESS_GROUP_ID}"
+| fieldsAdd entity.name, metadata, tags, softwareTechnologies
+```
+
+### Problem Correlation (Dual Model — Transition Period)
+
+Both `affected_entity_ids` (classic) and `smartscape.affected_entity.ids` (Smartscape)
+coexist on problem records. Always query BOTH with OR logic:
+
+```dql
+fetch logs, from:now() - 2h
+| filter dt.smartscape_source.id in [
+    fetch dt.davis.problems
+    | filter display_id == "{PROBLEM_ID}"
+    | filter not(dt.davis.is_duplicate)
+    | fields smartscape.affected_entity.ids
+] or dt.source_entity in [
+    fetch dt.davis.problems
+    | filter display_id == "{PROBLEM_ID}"
+    | filter not(dt.davis.is_duplicate)
+    | fields affected_entity_ids
+]
+```
+
+### Topology Diagrams
+
+Topology MUST be built from Smartscape relationships, not by stitching `fetch dt.entity.*`
+records:
+
+```dql
+-- Service dependency topology: services this entity calls and is called by
+fetch spans
+| filter dt.smartscape.service in [smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id]
+| filter span.kind == "client"
+| fieldsAdd caller = getNodeName(dt.smartscape.service),
+            callee = server.address
+| summarize call_count = count(), avg_duration = avg(duration),
+            by: {caller, callee}
+| sort call_count desc
+```
+
+---
+
+## EXECUTION PROTOCOL
+
+### Phase 0a: Multi-Anchor Parser
+
+```
+ANCHOR_TYPE + ANCHOR_VALUE:
+  P-\d+ pattern (any position)     → PROBLEM
+  SERVICE:"<name>" or SERVICE:<name> → SERVICE
+  FROM:"<iso>" + TO:"<iso>"         → TIME_WINDOW
+  TRACE:"<id>"                      → TRACE
+  ERROR:"<pattern>"                 → ERROR_PATTERN
+
+FLAGS:
+  -clean    → CLEAN_MODE = true
+  --review  → REVIEW_MODE = true
+
+FALLBACK: bare P-\d+ token (no prefix) → PROBLEM
+VALIDATION: if no anchor parseable → print usage and exit
+```
+
+---
+
+### Phase 0b: Context Bootstrap (Sequential — Orchestrator)
+
+Build the **DispatchContext** that all phase workers receive.
+
+#### If ANCHOR_TYPE == PROBLEM
+
+Run the dt-rca Tier 0 queries (Steps 1.1, 1.1b, 1.1c) from
+`~/.claude/skills/dt-rca/SKILL.md`. Extract:
+
+```
+PROBLEM_ID            display_id from dt.davis.problems
+PROBLEM_START         event.start
+PROBLEM_END           event.end (null if still ACTIVE)
+ROOT_ENTITY_ID        root_cause_entity_id (classic format: SERVICE-XXXX or PGI-XXXX)
+ROOT_ENTITY_NAME      root_cause_entity_name
+AFFECTED_ENTITY_IDS[] affected_entity_ids array
+ROOT_SERVICE_ID       resolved SERVICE entity ID (from Step 1.1b)
+ENTITY_TYPE           SERVICE | PGI | HOST | CUSTOM_DEVICE
+INVESTIGATION_STRATEGY error | performance | resource | availability
+ENTITY_TAGS[]         tags array
+IS_K8S_WORKLOAD       bool (true if k8s tags present)
+RUNTIME               java | nodejs | dotnet | python | php | go | unknown
+                      (from softwareTechnologies in ENTITY_TAGS or process group)
+```
+
+**REQUIRED:** Apply `not(dt.davis.is_duplicate)` on ALL `fetch dt.davis.problems` queries.
+
+DERIVED_TIME_WINDOW:
+```
+from: PROBLEM_START minus 2h
+to:   PROBLEM_END plus 1h (or now() if still ACTIVE)
+```
+
+#### If ANCHOR_TYPE == SERVICE
+
+```
+Tool: mcp__dynatrace__find_entity_by_name
+Input: SERVICE_NAME from ANCHOR_VALUE
+Extract: ROOT_SERVICE_ID (SERVICE-XXXX format), ROOT_ENTITY_NAME
+
+DERIVED_TIME_WINDOW: FROM/TO from arguments, or now()-2h to now() if none provided
+INVESTIGATION_STRATEGY = "open"
+IS_K8S_WORKLOAD = false (unknown — W-tracing will detect from span tags)
+RUNTIME = unknown (W-services will detect from span softwareTechnologies)
+```
+
+#### If ANCHOR_TYPE == TRACE
+
+```
+Tool: mcp__dynatrace__execute_dql
+Query:
+  fetch spans, from:now()-24h
+  | filter trace.id == toUid("{ANCHOR_VALUE}")
+  | fieldsAdd service_name = getNodeName(dt.smartscape.service)
+  | limit 1
+  | fields trace.id, dt.smartscape.service, service_name, start_time
+
+Extract: ROOT_SERVICE_ID from dt.smartscape.service, set DERIVED_TIME_WINDOW ±2h around start_time
+INVESTIGATION_STRATEGY = "open"
+```
+
+#### If ANCHOR_TYPE == TIME_WINDOW
+
+```
+DERIVED_TIME_WINDOW from FROM/TO arguments directly
+ROOT_SERVICE_ID = null (W-tracing will surface top error services in window)
+INVESTIGATION_STRATEGY = "open"
+```
+
+#### If ANCHOR_TYPE == ERROR_PATTERN
+
+```
+Tool: mcp__dynatrace__execute_dql
+Query:
+  fetch logs, from:now()-4h
+  | filter matchesPhrase(content, "{ANCHOR_VALUE}")
+  | filter loglevel == "ERROR"
+  | summarize count = count(), by: {dt.smartscape_source.id}
+  | sort count desc
+  | limit 1
+
+Extract: top dt.smartscape_source.id → set as ROOT_SERVICE_ID
+Query: find service name via smartscapeNodes SERVICE | filter id == ROOT_SERVICE_ID
+DERIVED_TIME_WINDOW = now()-4h to now()
+INVESTIGATION_STRATEGY = "open"
+```
+
+Store everything as **DispatchContext JSON**:
+
+```json
+{
+  "ANCHOR_TYPE": "...",
+  "ANCHOR_VALUE": "...",
+  "PROBLEM_ID": "P-XXXX or null",
+  "PROBLEM_START": "ISO or null",
+  "PROBLEM_END": "ISO or null",
+  "ROOT_SERVICE_ID": "SERVICE-XXXX or null",
+  "ROOT_ENTITY_ID": "SERVICE/PGI/HOST-XXXX or null",
+  "ROOT_ENTITY_NAME": "...",
+  "AFFECTED_ENTITY_IDS": [],
+  "ENTITY_TYPE": "SERVICE|PGI|HOST|CUSTOM_DEVICE|unknown",
+  "INVESTIGATION_STRATEGY": "error|performance|resource|availability|open",
+  "ENTITY_TAGS": [],
+  "IS_K8S_WORKLOAD": false,
+  "RUNTIME": "java|nodejs|dotnet|python|php|go|unknown",
+  "DERIVED_TIME_WINDOW": { "from": "ISO", "to": "ISO" },
+  "CLEAN_MODE": false,
+  "REVIEW_MODE": false
+}
+```
+
+---
+
+### Phase 1: Parallel Worker Dispatch
+
+**Dispatch in a SINGLE message with multiple Agent calls.** Do NOT run sequentially.
+
+Workers P, T, L, S run concurrently as subagents (`subagent_type: Explore`).
+Skip W-problems if ANCHOR_TYPE != PROBLEM.
+
+#### Worker Prompt Template
+
+```
+You are a forensic investigation worker for dt-rcf (Dynatrace Root Cause Forensics).
+
+LOAD the sub-skill at {SUB_SKILL_PATH} before writing any DQL.
+Also load the reference files listed: {REFERENCE_FILES}
+Use ONLY the patterns, field names, and query structures from those references.
+
+ENTITY MODEL — CRITICAL:
+- NEVER use dt.entity.service/host == "..." to filter spans or logs.
+  Use: filter dt.smartscape.service in [smartscapeNodes SERVICE | filter id == "ID" | fields id]
+- NEVER use classicEntitySelector().
+- For process group JVM metrics: group by {dt.smartscape.process, dt.process_group.id}
+- For entity names: getNodeName(dt.smartscape.service) or getNodeName(dt.smartscape.host)
+
+DISPATCH CONTEXT:
+{DISPATCH_CONTEXT_JSON}
+
+QUERIES TO RUN:
+{QUERY_INSTRUCTIONS_FOR_THIS_WORKER}
+
+RULES:
+- Run all independent queries in parallel (multiple tool calls per message).
+- Do NOT return raw rows. Internalize; summarize aggressively.
+- Cap your PhaseResult at ~4KB. Top-5 of anything, not top-50.
+- If a query fails, retry ONCE with corrected syntax. If it fails again,
+  mark as "<gap: reason>" and continue. Do not block on failures.
+- Use mcp__dynatrace__* tools. MCP is already authenticated.
+
+RETURN only this PhaseResult shape (JSON). Nothing else.
+{PHASE_RESULT_SCHEMA}
+```
+
+---
+
+#### W-problems (Skip if ANCHOR_TYPE != PROBLEM)
+
+**Sub-skill:** `~/.agents/skills/dt-obs-problems/SKILL.md`
+**References:** `references/problem-correlation.md`, `references/impact-analysis.md`, `references/problem-trending.md`
+
+**Queries to run (in parallel):**
+
+1. Problem details (from dt-rca Step 1.2 adapted with Smartscape dual-model filter)
+2. 7-day recurrence history:
+   ```dql
+   fetch dt.davis.problems, from:now()-7d
+   | filter not(dt.davis.is_duplicate)
+   | filter root_cause_entity_id == "{ROOT_ENTITY_ID}"
+   | fields display_id, event.name, event.status, event.category, event.start, event.end
+   | sort event.start desc
+   ```
+3. Blast radius (from dt-obs-problems > Problem Blast Radius pattern):
+   ```dql
+   fetch dt.davis.problems, from:now()-90d
+   | filter not(dt.davis.is_duplicate)
+   | filter display_id == "{PROBLEM_ID}"
+   | fieldsAdd affected_count = arraySize(smartscape.affected_entity.ids)
+   | fields display_id, affected_count, dt.davis.affected_users_count,
+            smartscape.affected_entity.ids, root_cause_entity_name
+   ```
+4. Deployment correlation (from dt-obs-problems > references/problem-correlation.md)
+
+**PhaseResult shape:**
+```json
+{
+  "problem_summary": { "category": "...", "status": "...", "duration_min": 0 },
+  "recurrence_count_7d": 0,
+  "prior_problems": [{ "display_id": "...", "start": "...", "category": "..." }],
+  "blast_radius": { "entity_count": 0, "user_count": 0 },
+  "deployment_in_window": { "found": false, "minutes_before_problem": null, "description": null },
+  "gaps": []
+}
+```
+
+---
+
+#### W-tracing
+
+**Sub-skill:** `~/.agents/skills/dt-obs-tracing/SKILL.md`
+**References:** `references/failure-detection.md`, `references/http-spans.md`,
+`references/database-spans.md`, `references/sampling-extrapolation.md`
+
+**Queries to run (in parallel):**
+
+1. **Failure reason taxonomy** (dt-obs-tracing > Failure Investigation):
+   ```dql
+   fetch spans, from:"{DERIVED_TIME_WINDOW.from}"
+   | filter start_time >= toTimestamp("{DERIVED_TIME_WINDOW.from}")
+       AND start_time <= toTimestamp("{DERIVED_TIME_WINDOW.to}")
+   | filter dt.smartscape.service in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ]
+   | filter request.is_failed == true
+   | expand dt.failure_detection.results
+   | summarize count = count(),
+               by: { dt.failure_detection.results[reason] }
+   | sort count desc
+   ```
+
+2. **Exception types from span.events** (dt-obs-tracing > Exception Analysis):
+   ```dql
+   fetch spans, from:now()-3d
+   | filter start_time >= toTimestamp("{DERIVED_TIME_WINDOW.from}")
+       AND start_time <= toTimestamp("{DERIVED_TIME_WINDOW.to}")
+   | filter dt.smartscape.service in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ]
+   | filter iAny(span.events[][span_event.name] == "exception")
+   | expand span.events
+   | fieldsFlatten span.events, fields: { exception.type }
+   | summarize count = count(),
+               trace = takeAny(record(start_time, trace.id)),
+               by: { exception.type }
+   | sort count desc
+   | limit 10
+   ```
+
+3. **Sampling-extrapolated request counts** (dt-obs-tracing > Sampling and Extrapolation):
+   ```dql
+   fetch spans, from:now()-3d
+   | filter start_time >= toTimestamp("{DERIVED_TIME_WINDOW.from}")
+       AND start_time <= toTimestamp("{DERIVED_TIME_WINDOW.to}")
+   | filter dt.smartscape.service in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ]
+   | filter request.is_root_span == true
+   | fieldsAdd sampling.multiplicity = 1 /
+       ((power(2, 56) - coalesce(sampling.threshold, 0)) * power(2, -56))
+   | fieldsAdd multiplicity = coalesce(sampling.multiplicity, 1)
+               * coalesce(aggregation.count, 1)
+               * dt.system.sampling_ratio
+   | summarize raw_spans = count(), extrapolated_requests = sum(multiplicity),
+               failed_spans = countIf(request.is_failed == true),
+               by: { bin(start_time, 15m) }
+   | sort `bin(start_time, 15m)` asc
+   ```
+
+4. **Top failing paths + HTTP status distribution:**
+   ```dql
+   fetch spans, from:now()-3d
+   | filter start_time >= toTimestamp("{DERIVED_TIME_WINDOW.from}")
+       AND start_time <= toTimestamp("{DERIVED_TIME_WINDOW.to}")
+   | filter dt.smartscape.service in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ]
+   | filter request.is_failed == true and isNotNull(http.response.status_code)
+   | summarize count = count(),
+               by: { http.response.status_code, endpoint.name }
+   | sort count desc
+   | limit 15
+   ```
+
+5. **Outbound dependency latency** (client spans — detect downstream degradation):
+   ```dql
+   fetch spans, from:now()-3d
+   | filter start_time >= toTimestamp("{DERIVED_TIME_WINDOW.from}")
+       AND start_time <= toTimestamp("{DERIVED_TIME_WINDOW.to}")
+   | filter dt.smartscape.service in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ]
+   | filter span.kind == "client"
+   | summarize call_count = count(), avg_duration_ms = avg(duration)/1000000,
+               max_duration_ms = max(duration)/1000000,
+               by: { bin(start_time, 15m), span.name }
+   | sort `bin(start_time, 15m)` asc
+   ```
+
+6. **Span schema discovery** (1 span, full record — find custom request_attribute.* fields):
+   ```dql
+   fetch spans, from:now()-1h
+   | filter dt.smartscape.service in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ]
+   | limit 1
+   ```
+
+**PhaseResult shape:**
+```json
+{
+  "failure_reasons": { "http_code": 0, "exception": 0, "grpc_code": 0, "span_status": 0, "custom_rule": 0 },
+  "top_exceptions": [{ "type": "...", "count": 0, "sample_trace_id": "..." }],
+  "failing_paths": [{ "endpoint": "...", "status_code": 0, "count": 0 }],
+  "request_count_raw": 0,
+  "request_count_extrapolated": 0,
+  "sampling_note": "1 span = ~N requests",
+  "outbound_degradation": [{ "span_name": "...", "avg_ms_baseline": 0, "avg_ms_peak": 0 }],
+  "custom_request_attributes": [],
+  "gaps": []
+}
+```
+
+---
+
+#### W-logs
+
+**Sub-skill:** `~/.agents/skills/dt-obs-logs/SKILL.md`
+
+**Queries to run (in parallel):**
+
+1. **Error/warn logs with JSON parsing** (dt-obs-logs > Structured / JSON Log Parsing):
+   ```dql
+   fetch logs, from:now()-3d
+   | filter start_time >= toTimestamp("{DERIVED_TIME_WINDOW.from}")
+       AND start_time <= toTimestamp("{DERIVED_TIME_WINDOW.to}")
+   | filter dt.smartscape_source.id in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ] or dt.source_entity in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ]
+   | filter in(loglevel, {"ERROR", "WARN"})
+   | sort timestamp desc
+   | limit 30
+   | fields timestamp, content, loglevel, dt.process_group.detected_name
+   ```
+   Then attempt JSON parse: `| parse content, "JSON:log"` — if it works, extract `log[msg]`, `log[error]`.
+
+2. **Exception / timeout pattern breakdown** (dt-obs-logs > Pattern Analysis):
+   ```dql
+   fetch logs, from:now()-3d
+   | filter start_time >= toTimestamp("{DERIVED_TIME_WINDOW.from}")
+       AND start_time <= toTimestamp("{DERIVED_TIME_WINDOW.to}")
+   | filter dt.smartscape_source.id in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ] or dt.source_entity in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ]
+   | filter loglevel == "ERROR"
+   | fieldsAdd
+       has_exception = if(matchesPhrase(content, "exception") OR matchesPhrase(content, "Exception"), true, else: false),
+       has_timeout = if(matchesPhrase(content, "timeout") OR matchesPhrase(content, "timed out"), true, else: false),
+       has_oom = if(matchesPhrase(content, "OutOfMemory") OR matchesPhrase(content, "heap space"), true, else: false)
+   | summarize
+       total_errors = count(),
+       exception_count = countIf(has_exception == true),
+       timeout_count = countIf(has_timeout == true),
+       oom_count = countIf(has_oom == true)
+   ```
+
+3. **Log error rate timeseries** (dt-obs-logs > Error Rate Calculation):
+   ```dql
+   fetch logs, from:now()-3d
+   | filter start_time >= toTimestamp("{DERIVED_TIME_WINDOW.from}")
+       AND start_time <= toTimestamp("{DERIVED_TIME_WINDOW.to}")
+   | filter dt.smartscape_source.id in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ] or dt.source_entity in [
+       smartscapeNodes SERVICE | filter id == "{ROOT_SERVICE_ID}" | fields id
+   ]
+   | summarize total = count(), errors = countIf(loglevel == "ERROR"),
+               by: { bin(timestamp, 15m) }
+   | fieldsAdd error_rate_pct = (errors * 100.0) / total
+   | sort `bin(timestamp, 15m)` asc
+   ```
+
+**PhaseResult shape:**
+```json
+{
+  "top_exceptions": [{ "message": "...", "count": 0 }],
+  "timeout_count": 0,
+  "oom_count": 0,
+  "log_error_rate_trend": [{ "time_bucket": "...", "error_rate_pct": 0 }],
+  "log_inflection_time": "ISO or null",
+  "raw_samples": [{ "timestamp": "...", "loglevel": "...", "content": "..." }],
+  "json_parsed": false,
+  "gaps": []
+}
+```
+
+---
+
+#### W-services
+
+**Sub-skill:** `~/.agents/skills/dt-obs-services/SKILL.md`
+**References (auto-detect from RUNTIME in DispatchContext):**
+- `java` → `references/java.md`
+- `nodejs` → `references/nodejs.md`
+- `dotnet` → `references/dotnet.md`
+- `python` → `references/python.md`
+- `php` → `references/php.md`
+- `go` → `references/go.md`
+- `unknown` → load `references/java.md` as default; note in gaps if tech unclear
+
+**Queries to run (in parallel):**
+
+1. **RED metrics timeseries** (dt-obs-services > Service Performance):
+   ```dql
+   timeseries {
+     total_requests = sum(dt.service.request.count),
+     failures = sum(dt.service.request.failure_count),
+     p95_us = percentile(dt.service.request.response_time, 95),
+     p99_us = percentile(dt.service.request.response_time, 99)
+   }, by: {dt.service.name},
+   from: "{DERIVED_TIME_WINDOW.from}", to: "{DERIVED_TIME_WINDOW.to}", interval: 15m
+   | filter dt.service.name == "{ROOT_ENTITY_NAME}"
+   | fieldsAdd p95_ms = p95_us[] / 1000, p99_ms = p99_us[] / 1000,
+               error_rate_pct = (failures[] * 100.0) / total_requests[]
+   ```
+
+2. **Runtime-specific metrics** — load the runtime reference file and run the
+   appropriate queries per the reference. Always run at minimum:
+   - If RUNTIME == java: GC impact + thread count + heap usage (per `references/java.md`)
+   - If RUNTIME == nodejs: Event loop utilization + V8 heap (per `references/nodejs.md`)
+   - If RUNTIME == dotnet: GC suspension + thread pool (per `references/dotnet.md`)
+   - If RUNTIME == python: Thread count + GC collections (per `references/python.md`)
+   - If RUNTIME == php: OPcache hit ratio + GC (per `references/php.md`)
+   - If RUNTIME == go: Goroutine count + GC suspension (per `references/go.md`)
+
+   Use `by: {dt.smartscape.process, dt.process_group.id}` grouping (NOT `filter dt.entity.process_group_instance`).
+   Filter to ROOT_ENTITY_ID process after:
+   ```dql
+   | filter dt.process_group.id == "{ROOT_PGI_OR_PG_ID}"
+   ```
+
+3. **Process group metadata** (legacy query — no Smartscape equivalent for softwareTechnologies):
+   ```dql
+   fetch dt.entity.process_group
+   | filter id == "{PROCESS_GROUP_ID}"
+   | fieldsAdd entity.name, metadata, tags, softwareTechnologies
+   ```
+   Note: this `fetch dt.entity.*` usage is necessary; no Smartscape equivalent exists for
+   command-line args and JVM flags. Document in report as "legacy metadata query".
+
+**PhaseResult shape:**
+```json
+{
+  "error_rate_pct_peak": 0,
+  "p95_ms_peak": 0,
+  "p99_ms_peak": 0,
+  "p95_ms_baseline": 0,
+  "runtime": "java|nodejs|...",
+  "runtime_signals": [{ "metric": "...", "finding": "...", "severity": "high|medium|low" }],
+  "jvm_flags": [],
+  "cmdline_args": "",
+  "software_technologies": [],
+  "mesh_overhead_ms": null,
+  "gaps": []
+}
+```
+
+---
+
+### Phase 2: Hypothesis Graph Construction (Orchestrator, Sequential)
+
+After all phase workers return, synthesize a ranked **Hypothesis Graph**.
+Each hypothesis represents a plausible root cause.
+
+#### Build hypotheses from cross-phase evidence:
+
+For each candidate root cause (derive from phase findings):
+```
+{
+  "hypothesis": "<concrete mechanism>",   // e.g., "DB connection pool exhausted (checkout → postgres)"
+  "evidence_refs": [
+    { "phase": "T", "sub_skill": "dt-obs-tracing", "finding": "..." },
+    { "phase": "L", "sub_skill": "dt-obs-logs",    "finding": "..." },
+    { "phase": "S", "sub_skill": "dt-obs-services/java.md", "finding": "..." }
+  ],
+  "confidence_factors": {
+    "span_evidence":      0.0-1.0,   // weight: 0.35
+    "log_corroboration":  0.0-1.0,   // weight: 0.25
+    "runtime_signal":     0.0-1.0,   // weight: 0.25
+    "prior_recurrence":   0.0-1.0    // weight: 0.15 (1.0 if pattern; 0.0 if first occurrence)
+  },
+  "confidence": 0.0-1.0             // weighted sum of factors
+}
+```
+
+**Confidence factor weights:**
+- `span_evidence` (0.35): Span data is ground truth. High if failure reason + exception type corroborate.
+- `log_corroboration` (0.25): Log error messages explicitly match the hypothesis.
+- `runtime_signal` (0.25): JVM/runtime metric directly confirms the mechanism (e.g., heap at 99%).
+- `prior_recurrence` (0.15): 1.0 if 2+ prior occurrences in 7 days; 0.5 if 1 prior; 0.0 if first.
+
+**Sort hypotheses by `confidence` descending.** H1 is the primary hypothesis.
+
+If fewer than 2 hypotheses can be constructed from evidence, add a low-confidence
+"Insufficient evidence" entry rather than leaving the graph with only one item.
+
+#### Confidence interpretation:
+- ≥ 0.80 → High confidence — lead the executive summary with this
+- 0.50-0.79 → Medium confidence — present as primary but note uncertainty
+- < 0.50 → Low confidence — present as "possible contributing factor"
+
+---
+
+### Phase 3: Davis CoPilot Synthesis (Orchestrator, Sequential)
+
+Pass **ranked hypothesis graph** to Davis CoPilot. Do NOT pass raw phase findings.
+
+```
+Tool: mcp__dynatrace__chat_with_davis_copilot
+
+Input text:
+FORENSIC INVESTIGATION: {ROOT_ENTITY_NAME} | {ANCHOR_TYPE}:{ANCHOR_VALUE}
+INVESTIGATION STRATEGY: {INVESTIGATION_STRATEGY}
+TIME WINDOW: {DERIVED_TIME_WINDOW.from} to {DERIVED_TIME_WINDOW.to}
+
+RANKED HYPOTHESES (evidence-based, sorted by confidence):
+
+H1 ({confidence}%): {hypothesis}
+Evidence:
+  - [Phase T — dt-obs-tracing]: {finding}
+  - [Phase L — dt-obs-logs]: {finding}
+  - [Phase S — dt-obs-services/{runtime}.md]: {finding}
+
+H2 ({confidence}%): {hypothesis}
+Evidence:
+  ...
+
+GAPS IN EVIDENCE: {list any phase gaps}
+
+QUESTIONS:
+1. Validate or refute each hypothesis. Does the evidence pattern match a known failure mode?
+2. Add any hypotheses the evidence supports that are missing from the graph.
+3. For H1 (and any H with confidence >= 0.60): provide specific remediation steps.
+4. Confidence level in your assessment. What additional data would increase confidence?
+```
+
+Davis CoPilot response feeds the "Root Cause Analysis" and "Recommended Resolution" sections.
+
+---
+
+### Phase 4: Report Generation
+
+Generate the report in this structure. If CLEAN_MODE, build sanitization map first
+(identical to dt-rca Phase 1.14 — read that section for full rules).
+
+```markdown
+# dt-rcf Forensic Analysis Report
+## Investigation: {ANCHOR_TYPE}: {ANCHOR_DISPLAY} | {CURRENT_DATE}
+
+**Analyst:** Claude {MODEL} (dt-rcf v1 — Dynatrace MCP Integration)
+**Environment:** {TENANT_URL}
+**Entry Anchor:** {ANCHOR_TYPE} = {ANCHOR_VALUE}
+**Time Window:** {DERIVED_TIME_WINDOW.from} → {DERIVED_TIME_WINDOW.to}
+**Phases Dispatched:** {P/T/L/S list}
+
+---
+
+## Executive Summary
+
+### Critical Findings
+[Lead with H1 if confidence ≥ 0.50, else "evidence inconclusive — see hypothesis rankings"]
+
+### Impact Summary
+| Metric | Value | Status |
+[Populated from W-problems blast radius + W-services RED metrics peak]
+
+### Business Impact
+[Bullet points of business-level impact — affected users, error rate peak, duration]
+
+### Immediate Action Required
+| Priority | Action | Owner | Urgency |
+[From Davis CoPilot remediation for H1]
+
+### Event Timeline Visualization
+```mermaid
+gantt / sequenceDiagram
+[Generated from collected timestamps — per dt-rca Mermaid rules]
+```
+
+---
+
+## Forensic Hypothesis Rankings
+
+| Rank | Hypothesis | Confidence | Span Evidence | Log Corroboration | Runtime Signal | Recurrence |
+|------|------------|------------|---------------|-------------------|----------------|------------|
+| H1   | ...        | 82%        | High          | High              | Medium         | 1x in 7d   |
+| H2   | ...        | 45%        | Low           | Medium            | None           | First       |
+
+**Confidence scoring:** span (35%) + log (25%) + runtime (25%) + recurrence (15%)
+
+---
+
+## Topology & Architecture
+
+### Service Dependency Map
+[Built from Smartscape span data — outbound client spans from W-tracing,
+getNodeName(dt.smartscape.service) for service names]
+
+```mermaid
+graph TB
+[Smartscape-derived service topology]
+```
+
+---
+
+## Sequence of Events
+
+```mermaid
+sequenceDiagram
+[Generated from problem start, log inflection, span failure onset, Davis detection]
+```
+
+---
+
+## Root Cause Analysis
+
+### Summary
+[Driven by H1 — cite Davis CoPilot validation + specific evidence refs]
+
+### Evidence Table
+| Timeframe | Source | Finding | Phase | Sub-Skill |
+[Cross-phase findings supporting H1]
+
+### Failure Cascade
+```mermaid
+graph LR
+[Generated from H1 mechanism chain]
+```
+
+### Contributing Factors
+| Factor | Details | Confidence | Source |
+[From hypothesis graph + Davis CoPilot]
+
+---
+
+## Failure Taxonomy
+
+### Failure Reason Breakdown (from dt-obs-tracing)
+| Reason | Count | Description |
+| http_code | N | HTTP status triggered failure detection |
+| exception | N | Exception in span (span.events) |
+| grpc_code | N | gRPC status triggered failure |
+| span_status | N | Span status explicitly set to error |
+| custom_rule | N | Custom failure detection rule matched |
+
+**Raw span count:** {request_count_raw}
+**Sampling-extrapolated request count:** {request_count_extrapolated}
+**Note:** {sampling_note — e.g., "1 span ≈ 4.2 actual requests (ATM sampling active)"}
+
+### Exception Types (from span.events — ground truth)
+| Exception Type | Count | Sample Trace |
+[From W-tracing top_exceptions]
+
+---
+
+## Evidence Chain
+
+Each finding cited in the Root Cause Analysis, with its source phase and sub-skill:
+
+| Phase | Sub-Skill | Finding | Supports |
+|-------|-----------|---------|----------|
+| T | dt-obs-tracing/failure-detection.md | ... | H1 |
+| L | dt-obs-logs | ... | H1 |
+| S | dt-obs-services/{runtime}.md | ... | H1 |
+| P | dt-obs-problems/problem-correlation.md | ... | H2 |
+
+---
+
+## Forensic Analysis
+
+### Request Volume vs Runtime Correlation
+[If W-services returned runtime signals + W-tracing returned extrapolated request counts:
+ASCII timeline showing requests vs thread count / heap / event loop over incident window]
+
+### Traffic Composition
+[User-agent breakdown if captured in custom request_attribute.* fields (discovered in W-tracing span schema)]
+
+### HTTP Status Distribution
+[15-min bins showing 2xx/4xx/5xx transition from W-tracing failing_paths]
+
+### Outbound Dependency Health
+[W-tracing outbound_degradation — which downstream services degraded and by how much]
+
+### Runtime-Specific Findings
+[W-services runtime_signals, formatted per detected runtime type]
+
+---
+
+## Recommended Resolution
+
+### Immediate Action
+[Primary recommendation from Davis CoPilot for H1]
+
+### Follow-Up Actions
+| Priority | Action | Owner | Timeline |
+[Structured remediation plan]
+
+---
+
+## Appendix A: Investigation Details
+| Field | Value |
+| Entry Anchor | {ANCHOR_TYPE}: {ANCHOR_VALUE} |
+| Phases Dispatched | {list} |
+| Sub-Skills Consulted | {list} |
+| Davis CoPilot | Used for synthesis |
+[Additional problem attributes if ANCHOR_TYPE == PROBLEM]
+
+## Appendix B: Glossary
+[Standard Dynatrace RCA glossary]
+
+## Appendix C: AI-Powered Analysis Capabilities
+[dt-rcf capabilities table]
+
+## Appendix D: Query Exchange Log
+[All DQL queries run across phases P/T/L/S with timing]
+
+---
+
+**Links:**
+- [View in Dynatrace]({ENTITY_OR_PROBLEM_URL})
+  Problem: `https://{TENANT}.apps.dynatrace.com/ui/apps/dynatrace.davis.problems/problem/{PROBLEM_ID}`
+  Service: `https://{TENANT}.apps.dynatrace.com/ui/entity/{ROOT_SERVICE_ID}`
+```
+
+---
+
+### Phase 5: Reviewer Gate (Optional — only if `--review`)
+
+Spawn ONE reviewer subagent. Checklist is identical to dt-rca-swarm Phase 5.
+Read `~/.claude/skills/dt-rca-swarm/SKILL.md` Phase 5 for the full reviewer prompt
+and scoring rubric. Additional dt-rcf check:
+
+```
+8. Hypothesis graph present? (Forensic Hypothesis Rankings section with confidence scores)
+9. Failure taxonomy present? (failure reason breakdown: http_code/exception/grpc/span_status)
+10. Evidence Chain section present? (each claim cites phase + sub-skill)
+11. Sampling note present? (raw vs extrapolated request count documented)
+```
+
+Scoring and verdict (ship/revise/reject) follow the same rules as dt-rca-swarm.
+
+---
+
+### Phase 6: Save MD + Generate PDF
+
+**Identical to dt-rca Phases 3+4.** Read `~/.claude/skills/dt-rca/SKILL.md` for:
+- Filename generation (normal and CLEAN_MODE)
+- md-to-pdf conversion command
+- Intermediate `_pdf.md` strategy (Mermaid → ASCII conversion)
+- Cleanup steps
+
+Filenames:
+```
+Normal:   RCF_{ANCHOR_SLUG}_{DATE}.md  /  RCF_{ANCHOR_SLUG}_{DATE}.pdf
+Clean:    RCF_{ANCHOR_SLUG}_{DATE}_SANITIZED.md  /  ...SANITIZED.pdf
+
+ANCHOR_SLUG examples:
+  P-26012752          → P26012752
+  SERVICE:checkout    → SERVICE_checkout
+  FROM_20260518T14    → WINDOW_20260518T14
+```
+
+---
+
+### Phase 7: Output Summary
+
+```markdown
+## dt-rcf Forensic Report Generated
+
+| Format | Filename |
+|--------|----------|
+| Markdown | RCF_{SLUG}.md |
+| PDF | RCF_{SLUG}.pdf |
+
+**Entry Anchor:** {ANCHOR_TYPE}: {ANCHOR_VALUE}
+**Time Window:** {from} → {to}
+**Phases Dispatched:** {list}
+
+### Hypothesis Summary
+| Rank | Hypothesis | Confidence |
+| H1   | ...        | {N}%       |
+| H2   | ...        | {N}%       |
+
+### Forensic Findings
+- **Root Cause (H1):** {one_line}
+- **Failure Taxonomy:** {top_reason}: {N} spans
+- **Exceptions:** {top_exception_type}: {N} occurrences
+- **Sampling:** {raw} raw spans ≈ {extrapolated} requests
+
+### dt-rcf Telemetry
+| Worker | Sub-Skill | Findings | Gaps |
+| W-problems | dt-obs-problems | ... | ... |
+| W-tracing  | dt-obs-tracing  | ... | ... |
+| W-logs     | dt-obs-logs     | ... | ... |
+| W-services | dt-obs-services/{runtime} | ... | ... |
+```
+
+If CLEAN_MODE, append sanitization key to console (never to file) per dt-rca rules.
+
+---
+
+## RULES (NON-NEGOTIABLE)
+
+### Inherited from dt-rca (all apply unchanged)
+
+1. Never skip data collection steps — attempted + empty is valid; unattempted is not
+2. Mermaid for .md only, ASCII for PDF (no raw Mermaid in PDFs)
+3. Executive audience — high-level language, not developer-focused
+4. Document all queries in Appendix D with timing
+5. Verify historical data — check if issue pre-existed any deployment
+6. Always generate both MD and PDF (unless pdf=false)
+7. Compact diagrams — graph LR for flowcharts, short node labels
+8. Two-file diagram strategy — _pdf.md intermediate, then delete
+9. Clean mode = zero leaks — no real names in final report
+10. Clean mode consistency — one real name → one fake name, always
+11. Clean mode plausibility — fake names must be realistic for their context
+12. DQL backtick quoting — field names with hyphens MUST use backticks
+13. DQL timestamp format — use `from:now()-Nd` + `toTimestamp()` filter, not absolute in from:
+14. DQL count alias — `summarize reqCount = count()` not bare `sort count()`
+15. Canonical link format — `/ui/entity/{ID}` and `/ui/apps/dynatrace.davis.problems/problem/{P-ID}`
+16. Service ID for spans — span queries require SERVICE entity IDs, not PGI IDs
+
+### New in dt-rcf
+
+17. **Smartscape-native entity model** — NEVER use `fetch dt.entity.*` for SERVICE, HOST, or
+    CLOUD_APPLICATION lookups. NEVER use `filter dt.entity.service/host ==` on spans/logs/events.
+    Use `dt.smartscape.*` fields, `smartscapeNodes`, `getNodeName()`, `getNodeField()` throughout.
+    Exception: `fetch dt.entity.process_group` for JVM flags / softwareTechnologies metadata
+    (no Smartscape equivalent — document as legacy query in report).
+
+18. **Sub-skills are DQL authority** — Never hardcode a DQL pattern that exists in a sub-skill
+    reference file. Worker prompts must reference the sub-skill path and load it before querying.
+
+19. **`not(dt.davis.is_duplicate)` required** — Apply on ALL `fetch dt.davis.problems` queries.
+
+20. **Failure taxonomy required** — W-tracing must attempt `dt.failure_detection.results[][reason]`
+    breakdown on every investigation. HTTP status count alone is insufficient.
+
+21. **Sampling extrapolation required** — When reporting request counts from spans, apply the
+    multiplicity formula. Report both raw span count and extrapolated request count.
+
+22. **Exception source priority** — Report exceptions from `span.events[][exception.type]` first
+    (span-level, ground truth). Supplement with log-level exceptions from W-logs.
+
+23. **Runtime detection required** — W-services must detect RUNTIME from DispatchContext and load
+    the correct reference file before running any runtime metrics queries.
+
+24. **Multi-entry required** — dt-rcf must accept all 5 anchor types. Never refuse to run without
+    a Problem ID. ANCHOR_TYPE == PROBLEM is one of five equal entry paths.
+
+25. **Hypothesis graph required** — Phase 2 must produce a ranked hypothesis graph before Davis
+    CoPilot. Passing raw phase findings to Davis CoPilot is prohibited.
+
+26. **Evidence chain required** — The report's Evidence Chain section must be present and must
+    cite phase + sub-skill source for every finding used in the Root Cause Analysis.
+
+27. **Topology from Smartscape only** — Service dependency maps must be built from `dt.smartscape.*`
+    span data (outbound client spans + `getNodeName(dt.smartscape.service)`). Never build topology
+    from manually stitched `fetch dt.entity.service | fieldsAdd calls, called_by` queries.
+
+28. **Parallel worker dispatch in single message** — All 4 (or 3) workers must be dispatched
+    in ONE message with multiple Agent calls. Sequential dispatch defeats the architecture.
+
+---
+
+## PDF DIAGRAM RULES
+
+Identical to dt-rca. Read `~/.claude/skills/dt-rca/SKILL.md` section "PDF DIAGRAM RULES".
+Summary: no Mermaid in PDFs — ASCII art only, inside plain code blocks, 80-char max width.
+
+---
+
+## MERMAID SYNTAX RULES
+
+Identical to dt-rca. Read `~/.claude/skills/dt-rca/SKILL.md` section "MERMAID SYNTAX RULES".
+Summary: `A["Text"]` not `A[\"Text\"]`; edge labels `-->|"Text"|`; no escaped quotes.
+
+---
+
+## DIAGRAM SIZING RULES
+
+Identical to dt-rca. Read `~/.claude/skills/dt-rca/SKILL.md` section "DIAGRAM SIZING RULES".
+Summary: graph LR for cascades >4 nodes; 3-4 words per node; no deeply nested subgraphs.
+
+---
+
+## ERROR HANDLING
+
+### No entity found for anchor
+```markdown
+## Error: Entity Not Found
+
+Anchor `{ANCHOR_TYPE}: {ANCHOR_VALUE}` could not be resolved to a Dynatrace entity.
+
+**Possible causes:**
+- Service name spelled differently in Dynatrace (use exact name from DT UI)
+- Trace ID not found in retention window
+- Problem ID incorrect or beyond 90d retention
+
+**Try:** Use `mcp__dynatrace__find_entity_by_name` with a partial name match.
+```
+
+### Worker fails entirely
+Orchestrator marks the corresponding section with ⚠️, notes the gap in Appendix A,
+and continues. Does not auto-retry — a second worker would likely fail for the same reason.
+
+### Davis CoPilot unavailable
+Generate report from hypothesis graph alone. Add banner:
+```
+> **Note:** Davis CoPilot synthesis unavailable. Root cause conclusions are derived
+> from cross-phase evidence and hypothesis scoring only.
+```
+
+### All hypotheses < 0.30 confidence
+Report findings as-is but add banner:
+```
+> **Inconclusive:** Evidence collected but no high-confidence root cause identified.
+> Review the Evidence Chain section and consider a /dt-rcf run with a narrower time window
+> or a specific TRACE: anchor from a known failing request.
+```
+
+---
+
+## BEGIN EXECUTION
+
+Parse `$ARGUMENTS` and begin Phase 0a. Execute all phases autonomously until report is saved.
+
+**Do not stop for confirmation between phases. Do not ask questions. Generate the complete report.**

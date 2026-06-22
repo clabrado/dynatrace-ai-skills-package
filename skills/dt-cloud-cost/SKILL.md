@@ -166,9 +166,9 @@ reference needs fixing.
 
 | Phase | Cloud | Reference file (read ONCE at worker start) |
 |---|---|---|
-| W-cost | aws | `~/.claude/skills/dt-obs-aws/references/resource-ownership.md` + `cost-optimization.md` |
-| W-cost | azure | `~/.claude/skills/dt-obs-azure/references/resource-ownership.md` + `cost-optimization.md` |
-| W-cost | gcp | `~/.claude/skills/dt-obs-gcp/references/resource-ownership.md` + `resource-management.md` |
+| W-cost | aws | `~/.agents/skills/dt-obs-aws/references/resource-ownership.md` + `cost-optimization.md` |
+| W-cost | azure | `~/.agents/skills/dt-obs-azure/references/resource-ownership.md` + `cost-optimization.md` |
+| W-cost | gcp | `~/.agents/skills/dt-obs-gcp/references/resource-ownership.md` + `resource-management.md` |
 | W-baseline | (same as W-cost) | (same files; different time window) |
 | W-movers | (same as W-cost) | (joins W-cost and W-baseline results) |
 | W-attribution | (same as W-cost) | + entity-specific service queries from `cost-optimization.md` |
@@ -199,22 +199,22 @@ Never guess a path, metric, or field name — fix it here and re-validate.
 
 | File | Purpose | When to read |
 |------|---------|--------------|
-| `~/.claude/skills/dtctl/references/DQL-reference.md` | Core DQL syntax, filter patterns, aggregation | Always (Phase 0c) |
-| `~/.claude/skills/dt-dql-essentials/references/dql/dql-functions-smartscape.md` | smartscapeNodes, getNodeName, getNodeField signatures | Always (Phase 0c) |
+| `~/.agents/skills/dtctl/references/DQL-reference.md` | Core DQL syntax, filter patterns, aggregation | Always (Phase 0c) |
+| `~/.agents/skills/dt-dql-essentials/references/dql/dql-functions-smartscape.md` | smartscapeNodes, getNodeName, getNodeField signatures | Always (Phase 0c) |
 
 ### W-cost / W-baseline / W-movers / W-attribution
 
 | Cloud | File | When to read |
 |------|------|--------------|
-| aws | `~/.claude/skills/dt-obs-aws/SKILL.md` | Always |
-| aws | `~/.claude/skills/dt-obs-aws/references/resource-ownership.md` | Always (TAG group-by patterns) |
-| aws | `~/.claude/skills/dt-obs-aws/references/cost-optimization.md` | Always (resource inventory; idle detection) |
-| azure | `~/.claude/skills/dt-obs-azure/SKILL.md` | Always |
-| azure | `~/.claude/skills/dt-obs-azure/references/resource-ownership.md` | Always |
-| azure | `~/.claude/skills/dt-obs-azure/references/cost-optimization.md` | Always |
-| gcp | `~/.claude/skills/dt-obs-gcp/SKILL.md` | Always |
-| gcp | `~/.claude/skills/dt-obs-gcp/references/resource-ownership.md` | Always (gcp_labels pattern) |
-| gcp | `~/.claude/skills/dt-obs-gcp/references/resource-management.md` | Always (project + region rollups) |
+| aws | `~/.agents/skills/dt-obs-aws/SKILL.md` | Always |
+| aws | `~/.agents/skills/dt-obs-aws/references/resource-ownership.md` | Always (TAG group-by patterns) |
+| aws | `~/.agents/skills/dt-obs-aws/references/cost-optimization.md` | Always (resource inventory; idle detection) |
+| azure | `~/.agents/skills/dt-obs-azure/SKILL.md` | Always |
+| azure | `~/.agents/skills/dt-obs-azure/references/resource-ownership.md` | Always |
+| azure | `~/.agents/skills/dt-obs-azure/references/cost-optimization.md` | Always |
+| gcp | `~/.agents/skills/dt-obs-gcp/SKILL.md` | Always |
+| gcp | `~/.agents/skills/dt-obs-gcp/references/resource-ownership.md` | Always (gcp_labels pattern) |
+| gcp | `~/.agents/skills/dt-obs-gcp/references/resource-management.md` | Always (project + region rollups) |
 
 **Sanitization, URL format, Mermaid/ASCII diagram rules, and PDF generation:**
 These are identical to `/dt-rca`. Read `~/.claude/skills/dt-rca/SKILL.md` sections
@@ -1010,7 +1010,7 @@ If `event_count == 0`:
        "cost.list.price"); otherwise the spend feed ("cost.list.spend") is
        required.
 
-  See ~/.claude/skills/dt-obs-{CLOUD}/SKILL.md for the carbon-app onboarding
+  See ~/.agents/skills/dt-obs-{CLOUD}/SKILL.md for the carbon-app onboarding
   checklist, or contact your Dynatrace platform owner.
   ```
 - Log the failure to the run log and exit with non-zero status.
@@ -1269,7 +1269,7 @@ Often signals decommissioned workloads, retired instance types, or sunset projec
 4. **Idle-resource sweep for the top owner.** Cross-reference the top owner's
    resources against the cloud's idle-detection patterns (EC2 < 5% CPU, Lambda
    zero invocations, unattached disks, etc. — see
-   `~/.claude/skills/dt-obs-{CLOUD}/references/cost-optimization.md`).
+   `~/.agents/skills/dt-obs-{CLOUD}/references/cost-optimization.md`).
 
 ---
 
@@ -1518,9 +1518,9 @@ chargeback breakdown is unavailable until host attribution + tagging are enabled
   | fieldsAdd coverage_pct = (with_tag * 100.0) / total
   ```
 - Reference docs:
-  - AWS:   `~/.claude/skills/dt-obs-aws/references/resource-ownership.md`
-  - Azure: `~/.claude/skills/dt-obs-azure/references/resource-ownership.md`
-  - GCP:   `~/.claude/skills/dt-obs-gcp/references/resource-ownership.md`
+  - AWS:   `~/.agents/skills/dt-obs-aws/references/resource-ownership.md`
+  - Azure: `~/.agents/skills/dt-obs-azure/references/resource-ownership.md`
+  - GCP:   `~/.agents/skills/dt-obs-gcp/references/resource-ownership.md`
 ```
 
 ### If worker queries fail

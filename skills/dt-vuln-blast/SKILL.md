@@ -90,10 +90,10 @@ fixing.
 
 | Phase | Reference file (read ONCE at worker start) |
 |---|---|
-| W-affected     | `~/.claude/skills/dt-obs-services/SKILL.md` (entity resolution + Smartscape patterns) |
-| W-reachability | `~/.claude/skills/dt-obs-tracing/references/failure-detection.md` + `database-spans.md` + `http-spans.md` |
-| W-ownership    | `~/.claude/skills/dt-obs-kubernetes/references/labels-annotations.md` + `workload-health.md` |
-| W-exposure     | `~/.claude/skills/dt-obs-services/references/service-metrics.md` (RED + traffic) |
+| W-affected     | `~/.agents/skills/dt-obs-services/SKILL.md` (entity resolution + Smartscape patterns) |
+| W-reachability | `~/.agents/skills/dt-obs-tracing/references/failure-detection.md` + `database-spans.md` + `http-spans.md` |
+| W-ownership    | `~/.agents/skills/dt-obs-kubernetes/references/labels-annotations.md` + `workload-health.md` |
+| W-exposure     | `~/.agents/skills/dt-obs-services/references/service-metrics.md` (RED + traffic) |
 
 ---
 
@@ -109,14 +109,14 @@ and re-validate.**
 
 | File | Purpose | When to read |
 |------|---------|--------------|
-| `~/.claude/skills/dtctl/references/DQL-reference.md` | Core DQL syntax, filter patterns, aggregation | Always (Phase 0c) |
-| `~/.claude/skills/dt-dql-essentials/references/dql/dql-functions-smartscape.md` | smartscapeNodes, getNodeName, getNodeField exact signatures | Always (Phase 0c) |
+| `~/.agents/skills/dtctl/references/DQL-reference.md` | Core DQL syntax, filter patterns, aggregation | Always (Phase 0c) |
+| `~/.agents/skills/dt-dql-essentials/references/dql/dql-functions-smartscape.md` | smartscapeNodes, getNodeName, getNodeField exact signatures | Always (Phase 0c) |
 
 ### W-affected — Dynatrace AppSec (Grail security events)
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-services/SKILL.md` | Always — entity resolution patterns |
+| `~/.agents/skills/dt-obs-services/SKILL.md` | Always — entity resolution patterns |
 
 > **AppSec schema authority (CORRECTED + VALIDATED LIVE 2026-06-03, tenant
 > `demo`):** `security.events` is queried directly. Fields used:
@@ -151,24 +151,24 @@ and re-validate.**
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-tracing/SKILL.md` | Always — W-reachability |
-| `~/.claude/skills/dt-obs-tracing/references/failure-detection.md` | Always — error-path involvement |
-| `~/.claude/skills/dt-obs-tracing/references/database-spans.md` | If LIB suggests DB driver / ORM (jackson-databind, hibernate, jdbc) |
-| `~/.claude/skills/dt-obs-tracing/references/http-spans.md` | If LIB suggests HTTP layer (jetty, tomcat-embed-core, netty, axios) |
+| `~/.agents/skills/dt-obs-tracing/SKILL.md` | Always — W-reachability |
+| `~/.agents/skills/dt-obs-tracing/references/failure-detection.md` | Always — error-path involvement |
+| `~/.agents/skills/dt-obs-tracing/references/database-spans.md` | If LIB suggests DB driver / ORM (jackson-databind, hibernate, jdbc) |
+| `~/.agents/skills/dt-obs-tracing/references/http-spans.md` | If LIB suggests HTTP layer (jetty, tomcat-embed-core, netty, axios) |
 
 ### W-ownership — dt-obs-kubernetes
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-kubernetes/SKILL.md` | Always — W-ownership |
-| `~/.claude/skills/dt-obs-kubernetes/references/labels-annotations.md` | Always — team/owner label conventions |
-| `~/.claude/skills/dt-obs-kubernetes/references/workload-health.md` | Always — workload → service correlation |
+| `~/.agents/skills/dt-obs-kubernetes/SKILL.md` | Always — W-ownership |
+| `~/.agents/skills/dt-obs-kubernetes/references/labels-annotations.md` | Always — team/owner label conventions |
+| `~/.agents/skills/dt-obs-kubernetes/references/workload-health.md` | Always — workload → service correlation |
 
 ### W-exposure — dt-obs-services
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-services/references/service-metrics.md` | Always — RED metrics + traffic timeseries |
+| `~/.agents/skills/dt-obs-services/references/service-metrics.md` | Always — RED metrics + traffic timeseries |
 
 ---
 
@@ -688,7 +688,7 @@ RETURN only this WorkerResult shape (JSON). Nothing else.
 #### W-affected — enumerate affected components per CVE/lib
 
 **REFERENCE-DRIVEN — dt-vuln-blast carries NO inline AppSec DQL.** Read
-`~/.claude/skills/dt-obs-services/SKILL.md` ONCE for entity resolution patterns.
+`~/.agents/skills/dt-obs-services/SKILL.md` ONCE for entity resolution patterns.
 Take the AppSec record patterns from the **Skill Registry > W-affected** schema
 notes above, applying these dt-vuln-blast must-keeps.
 
@@ -745,7 +745,7 @@ serving SERVICE name):
 
 #### W-reachability — span call paths through the vulnerable library
 
-**REFERENCE-DRIVEN — read `~/.claude/skills/dt-obs-tracing/references/failure-detection.md`
+**REFERENCE-DRIVEN — read `~/.agents/skills/dt-obs-tracing/references/failure-detection.md`
 ONCE** (failure reason taxonomy, exception types). Read
 `http-spans.md` ONLY if the library suggests HTTP entry (`jetty`, `tomcat-embed-core`,
 `netty`, `axios`, `express`). Read `database-spans.md` ONLY if the library
@@ -837,7 +837,7 @@ fetch spans, from:now()-7d
 
 #### W-ownership — services → owning teams via Smartscape + K8s labels
 
-**REFERENCE-DRIVEN — read `~/.claude/skills/dt-obs-kubernetes/references/labels-annotations.md`
+**REFERENCE-DRIVEN — read `~/.agents/skills/dt-obs-kubernetes/references/labels-annotations.md`
 + `workload-health.md` ONCE.** Take label conventions from the reference; apply
 the dt-vuln-blast scoping below.
 
@@ -921,7 +921,7 @@ smartscapeNodes SERVICE
 #### W-exposure — traffic volume + internet-facing classification
 
 **REFERENCE-DRIVEN — read
-`~/.claude/skills/dt-obs-services/references/service-metrics.md` ONCE.** Take
+`~/.agents/skills/dt-obs-services/references/service-metrics.md` ONCE.** Take
 the RED + traffic timeseries patterns from there; apply the dt-vuln-blast
 must-keeps below.
 

@@ -82,9 +82,9 @@ metric changes upstream, only the reference needs fixing.
 
 | Phase | Reference file (read ONCE at worker start) |
 |---|---|
-| W-vitals | `~/.claude/skills/dt-obs-frontends/references/WebVitals.md` (vital metric names + `timeseries percentile()` patterns) |
+| W-vitals | `~/.agents/skills/dt-obs-frontends/references/WebVitals.md` (vital metric names + `timeseries percentile()` patterns) |
 | W-regressions | (Synthesizer worker — reads no reference. Consumes W-vitals output, applies regression thresholds, emits regressed-page list.) |
-| W-attribution | `~/.claude/skills/dt-obs-frontends/references/RequestPerformance.md` + `RequestTimingAnalysis.md` + `TraceCorrelation.md` + `~/.claude/skills/dt-obs-tracing/references/entity-lookups.md` + `request-attributes.md` |
+| W-attribution | `~/.agents/skills/dt-obs-frontends/references/RequestPerformance.md` + `RequestTimingAnalysis.md` + `TraceCorrelation.md` + `~/.agents/skills/dt-obs-tracing/references/entity-lookups.md` + `request-attributes.md` |
 
 ---
 
@@ -114,26 +114,26 @@ flags — never put `from:`/`to:` in the DQL.
 
 | File | Purpose | When to read |
 |------|---------|--------------|
-| `~/.claude/skills/dtctl/references/DQL-reference.md` | Core DQL syntax, filter patterns, aggregation | Orchestrator Phase 0c |
-| `~/.claude/skills/dt-dql-essentials/references/dql/dql-functions-smartscape.md` | smartscapeNodes, getNodeName, getNodeField exact signatures | Orchestrator Phase 0c (only if --vs-deploy resolves to a deployment event needing entity context) |
+| `~/.agents/skills/dtctl/references/DQL-reference.md` | Core DQL syntax, filter patterns, aggregation | Orchestrator Phase 0c |
+| `~/.agents/skills/dt-dql-essentials/references/dql/dql-functions-smartscape.md` | smartscapeNodes, getNodeName, getNodeField exact signatures | Orchestrator Phase 0c (only if --vs-deploy resolves to a deployment event needing entity context) |
 
 ### W-vitals — dt-obs-frontends
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-frontends/SKILL.md` | Always — W-vitals |
-| `~/.claude/skills/dt-obs-frontends/references/WebVitals.md` | Always — vital metric names + `timeseries percentile()` patterns |
-| `~/.claude/skills/dt-obs-frontends/references/AdvancedPerformance.md` | Conditional — only if `--with-geo` AND probe succeeds (geo dimension on metrics is v2-gated) |
+| `~/.agents/skills/dt-obs-frontends/SKILL.md` | Always — W-vitals |
+| `~/.agents/skills/dt-obs-frontends/references/WebVitals.md` | Always — vital metric names + `timeseries percentile()` patterns |
+| `~/.agents/skills/dt-obs-frontends/references/AdvancedPerformance.md` | Conditional — only if `--with-geo` AND probe succeeds (geo dimension on metrics is v2-gated) |
 
 ### W-attribution — dt-obs-frontends + dt-obs-tracing
 
 | File | When to read |
 |------|--------------|
-| `~/.claude/skills/dt-obs-frontends/references/RequestPerformance.md` | Always — `dt.frontend.request.duration` timeseries + browser/device split |
-| `~/.claude/skills/dt-obs-frontends/references/RequestTimingAnalysis.md` | Always — TTFB decomposition (DNS / connect / TLS / server / download) |
-| `~/.claude/skills/dt-obs-frontends/references/TraceCorrelation.md` | Always — trace.id linkage from `user.events` to spans (backend attribution) |
-| `~/.claude/skills/dt-obs-tracing/references/entity-lookups.md` | Always — `getNodeName(dt.smartscape.service)` for backend service names in correlation output |
-| `~/.claude/skills/dt-obs-tracing/references/request-attributes.md` | Conditional — only if W-attribution finds custom `request_attribute.*` on the joined spans (rare for RUM-driven traces; useful for B2B portals with custom client headers) |
+| `~/.agents/skills/dt-obs-frontends/references/RequestPerformance.md` | Always — `dt.frontend.request.duration` timeseries + browser/device split |
+| `~/.agents/skills/dt-obs-frontends/references/RequestTimingAnalysis.md` | Always — TTFB decomposition (DNS / connect / TLS / server / download) |
+| `~/.agents/skills/dt-obs-frontends/references/TraceCorrelation.md` | Always — trace.id linkage from `user.events` to spans (backend attribution) |
+| `~/.agents/skills/dt-obs-tracing/references/entity-lookups.md` | Always — `getNodeName(dt.smartscape.service)` for backend service names in correlation output |
+| `~/.agents/skills/dt-obs-tracing/references/request-attributes.md` | Conditional — only if W-attribution finds custom `request_attribute.*` on the joined spans (rare for RUM-driven traces; useful for B2B portals with custom client headers) |
 
 ---
 
@@ -687,7 +687,7 @@ RETURN only this PhaseResult shape (JSON). Nothing else.
 #### W-vitals (Vitals Worker)
 
 **REFERENCE-DRIVEN — dt-dem-vitals carries NO RUM DQL beyond bootstrap.** Read
-`~/.claude/skills/dt-obs-frontends/references/WebVitals.md` ONCE (all vital
+`~/.agents/skills/dt-obs-frontends/references/WebVitals.md` ONCE (all vital
 metric names + percentile patterns). Read once per subagent; never re-read.
 
 **dt-dem-vitals scoping/hygiene for EVERY vitals query (tenant-validated):**
