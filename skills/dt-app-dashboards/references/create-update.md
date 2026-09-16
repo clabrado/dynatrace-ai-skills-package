@@ -128,6 +128,11 @@ The deploy script validates and deploys in one step. If validation fails, fix **
 
 On success, the script outputs the deployment result (action, id, name, url) and deletes the local JSON file. Present the URL to the user.
 
+**Known validator/render issues:**
+- **False tile failures on large dashboards** — the in-tenant validator can fail tiles with `Too many parallel requests per user` (a rate limit, not a query error). Copy only the failing tiles into a subset dashboard JSON and re-run the deploy script with `--dry-run`; once they pass, deploy the full file with `dtctl apply -f dashboard.json --plain`.
+- **`customColor` shape** — for `colorMode: "custom-color"` rules, `customColor` must be a string (`"#0D9C29"`) or `{ "Default": "<string>" }`. A nested `{ "Default": { "Default": ... } }` crashes the tile at render.
+- **Render-check before done** — open the deployed URL in a browser and confirm every tile renders. Validation success alone does not prove the dashboard works.
+
 ---
 
 ## Anti-Patterns
