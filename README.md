@@ -97,7 +97,7 @@ All 8 Tier 1/2 skills were re-validated end-to-end on 2026-06-03 and corrected. 
 - **Anti-hallucination guardrails.** A pre-dispatch reality gate refuses to fan out workers if Phase 0b couldn't run a successful query; every worker prompt opens with "no data = `<gap>`, never fabricate a number."
 - **Auth hardened.** Workers never run `dtctl auth login`/`refresh` — auth is orchestrator-only, interactive, and never races concurrent logins (a concurrent-login race corrupted the token store during testing).
 
-Full re-test log: `dt-uber-skills-fixrun-results-2026-06-03.md`.
+Full re-test log: `dt-uber-skills-fixrun-results-2026-06-03.md` (not published in this repo).
 
 ---
 
@@ -118,17 +118,33 @@ brew install dynatrace-oss/tap/dtctl
 curl -fsSL https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.sh | bash
 ```
 
-**Configure dtctl** with your Dynatrace tenant and OAuth token:
-```bash
-dtctl config create-context my-tenant \
-  --environment https://YOUR_TENANT.apps.dynatrace.com \
-  --token YOUR_OAUTH_TOKEN
+**Configure dtctl** with your Dynatrace environment.
 
-dtctl config use-context my-tenant
-dtctl auth whoami
+Recommended — OAuth browser login (creates the context and stores the token):
+```bash
+DTCTL_TOKEN_STORAGE=file dtctl auth login --context my-tenant \
+  --environment https://<env-id>.apps.dynatrace.com \
+  --safety-level readonly
+
+# Verify config, token, connectivity, and API auth
+DTCTL_TOKEN_STORAGE=file dtctl doctor
+
+# Verify a real read works
+DTCTL_TOKEN_STORAGE=file dtctl query 'fetch logs | limit 1' --plain
 ```
 
-> **Token storage:** All skills use `DTCTL_TOKEN_STORAGE=file` (on-disk token, never Keychain).  
+Alternative — API token:
+```bash
+DTCTL_TOKEN_STORAGE=file dtctl config set-credentials my-tenant-token --token <YOUR_API_TOKEN>
+dtctl config set-context my-tenant \
+  --environment https://<env-id>.apps.dynatrace.com \
+  --token-ref my-tenant-token \
+  --safety-level readonly
+dtctl config use-context my-tenant
+DTCTL_TOKEN_STORAGE=file dtctl doctor
+```
+
+> **Token storage:** The Tier 1/2 analysis skills prefix every dtctl call with `DTCTL_TOKEN_STORAGE=file` (on-disk token store at `~/.local/share/dtctl/oauth-tokens/`, never Keychain). dtctl defaults to the OS keyring, so log in with the same setting or those skills won't find your token.  
 > Set this in your Claude Code `settings.json` env block:
 > ```json
 > { "env": { "DTCTL_TOKEN_STORAGE": "file" } }
@@ -138,15 +154,11 @@ dtctl auth whoami
 
 These skills consume reference files from the [dynatrace-for-ai](https://github.com/Dynatrace/dynatrace-for-ai) skills package as their DQL authority. The worker agents read those reference files at runtime.
 
-**Install dynatrace-for-ai skills:**
-```bash
-# Clone the repo
-git clone https://github.com/Dynatrace/dynatrace-for-ai.git
-
-# Install skills to Claude Code
-cp -r dynatrace-for-ai/skills/* ~/.claude/skills/
-# or install via Claude Code's plugin system
-```
+> **Install location matters.** Nine skills (`dt-ai-obs`, `dt-cloud-cost`, `dt-dem-vitals`, `dt-deploy-risk`, `dt-k8s-podf`, `dt-rcf`, `dt-rum-journey`, `dt-slo-burn`, `dt-vuln-blast`) read these files from hard-coded `~/.agents/skills/<skill>/...` paths — not from `~/.claude/skills/`. Install the dependency skills into `~/.agents/skills/` and symlink them into `~/.claude/skills/` (see [Installation](#installation)).
+>
+> **Use this package's bundled `dt-obs-frontends`, not upstream's.** `dt-dem-vitals` and `dt-rum-journey` read CamelCase reference files (e.g. `dt-obs-frontends/references/WebVitals.md`) that exist in the copy bundled here but were renamed in current upstream dynatrace-for-ai (e.g. `web-vitals.md`).
+>
+> The `dt-*` copies in `skills/` are snapshots of dynatrace-for-ai; installing or updating from upstream may overwrite them.
 
 Skills consumed by this package:
 - `dt-obs-problems` — Davis problem patterns, trending, impact analysis
@@ -160,6 +172,7 @@ Skills consumed by this package:
 - `dt-app-notebooks` — Dynatrace Notebook JSON authoring and deploy
 - `dt-app-dashboards` — Dynatrace Dashboard JSON authoring and deploy
 - `dt-dql-essentials` — DQL syntax, smartscapeNodes, getNodeName signatures
+- `dtctl` (installed by `dtctl skills install`) — `references/DQL-reference.md` is required by the nine skills above
 
 ---
 
@@ -168,15 +181,35 @@ Skills consumed by this package:
 ```bash
 # 1. Clone this repo
 git clone https://github.com/clabrado/dynatrace-ai-skills-package.git
+cd dynatrace-ai-skills-package/skills
+mkdir -p ~/.agents/skills ~/.claude/skills
 
-# 2. Copy skills to Claude Code skills directory
-cp -r dynatrace-ai-skills-package/skills/* ~/.claude/skills/
+# 2. Dependency skills (bundled dynatrace-for-ai snapshots, incl. dt-obs-frontends)
+#    -> ~/.agents/skills, symlinked into ~/.claude/skills
+#    (remove any existing non-symlink copies of these in ~/.claude/skills first)
+for s in dt-dql-essentials dt-obs-*; do
+  cp -R "$s" ~/.agents/skills/
+  ln -sfn "../../.agents/skills/$s" ~/.claude/skills/"$s"
+done
 
-# 3. Verify skills are discoverable (restart Claude Code session if needed)
-ls ~/.claude/skills/ | grep dt-
+# 3. dtctl skill (required by the nine skills listed above) -> ~/.agents/skills/dtctl
+dtctl skills install --cross-client --global
+ln -sfn ../../.agents/skills/dtctl ~/.claude/skills/dtctl
+
+# 4. Everything else -> ~/.claude/skills
+for s in */; do
+  s=${s%/}
+  case "$s" in dt-dql-essentials|dt-obs-*) continue ;; esac
+  cp -R "$s" ~/.claude/skills/
+done
+
+# 5. Verify: files the nine skills read must resolve
+ls ~/.agents/skills/dtctl/references/DQL-reference.md \
+   ~/.agents/skills/dt-obs-frontends/references/WebVitals.md
+ls -l ~/.claude/skills/ | grep dt-   # restart Claude Code session if needed
 ```
 
-> **Note:** Skills are `.md` files inside named directories. Claude Code and other MCP-compatible AI clients auto-discover them from `~/.claude/skills/` or the equivalent configured skills directory.
+> **Note:** Skills are `.md` files inside named directories. Claude Code auto-discovers them from `~/.claude/skills/`; the symlinks (e.g. `~/.claude/skills/dt-dql-essentials -> ../../.agents/skills/dt-dql-essentials`) make the `~/.agents/skills/` copies visible there too.
 
 ---
 
@@ -280,6 +313,7 @@ Substrate authority: `/dt-rcf` SKILL.md
 | Dependency | Required | Purpose |
 |---|---|---|
 | [dtctl](https://github.com/dynatrace-oss/dtctl) | ✅ Required | Dynatrace CLI for DQL queries and resource management |
-| [dynatrace-for-ai](https://github.com/Dynatrace/dynatrace-for-ai) | ✅ Required | Reference skill files consumed by worker agents |
+| [dynatrace-for-ai](https://github.com/Dynatrace/dynatrace-for-ai) | ✅ Required | Reference skill files consumed by worker agents (bundled snapshots in `skills/`; install to `~/.agents/skills/`) |
+| dtctl skill (`dtctl skills install --cross-client --global`) | ✅ Required | `~/.agents/skills/dtctl/references/DQL-reference.md` read by nine skills |
 | [md-to-pdf](https://github.com/simonhaenisch/md-to-pdf) | Optional — only for `--pdf` output (default is Markdown-only) | Converts markdown reports to PDF; if absent, the skill logs one line and ships the `.md` |
 | GitHub MCP | Optional | Required only for `/dt-vuln-blast --pr/--apply` |

@@ -61,7 +61,7 @@ and query patterns. Do NOT invent field names.
 **Step 1.1 — Fetch problem record:**
 
 ```dql
-fetch dt.davis.problems, from:now()-24h
+fetch dt.davis.problems, from:now()-7d
 | filter display_id == "<PROBLEM_ID>"
 | fields
     display_id, event.name, event.category, event.status,
@@ -84,9 +84,10 @@ Extract:
 - `WINDOW_START` — `PROBLEM_START - 30min` as **epoch milliseconds** (e.g. `1779816900000`) for `defaultTimeframe`; as **quoted ISO 8601** (e.g. `"2026-05-26T17:35:00Z"`) for DQL `from:` clauses
 - `WINDOW_END` — `PROBLEM_END + 30min`, or current epoch ms if still ACTIVE
 
-If zero records: widen to `from:now()-7d`, retry once. Still nothing → report and stop.
+If zero records: widen to `from:now()-30d`, retry once. Still nothing → report and stop.
+Never use a 24h lookback for Davis problems — a problem that started more than 24h ago is silently missed.
 
-**Step 1.2 — Deployment trigger check** (parallel with 1.3):
+**Step 1.2 — Deployment trigger check** (parallel with 1.3 on dtctl ≥ v0.28.0; run serially on older dtctl — see 4.1):
 
 ```dql
 fetch events, from:now()-6h
@@ -100,10 +101,10 @@ fetch events, from:now()-6h
 Set `IS_DEPLOYMENT_TRIGGERED = true` if a deployment exists within 30 min before
 `PROBLEM_START`.
 
-**Step 1.3 — Related ACTIVE problems** (parallel with 1.2):
+**Step 1.3 — Related ACTIVE problems** (parallel with 1.2 on dtctl ≥ v0.28.0; serially on older dtctl):
 
 ```dql
-fetch dt.davis.problems, from:now()-24h
+fetch dt.davis.problems, from:now()-7d
 | filter not(dt.davis.is_duplicate) and event.status == "ACTIVE"
 | filter matchesPhrase(arrayToString(affected_entity_names, delimiter:","), "<ROOT_ENTITY_NAME_FRAGMENT>")
 | fields display_id, event.name, event.category, event.start,
@@ -127,17 +128,20 @@ Compute once from the problem record:
 Three layers must ALL be set:
 1. **`defaultTimeframe`** → `{"from": "<WINDOW_START_MS>", "to": "<WINDOW_END_MS>"}` as **epoch ms strings**. The dashboard API silently ignores ISO 8601 here and falls back to `now()-3h`. Convert with: `python3 -c "from datetime import datetime,timezone as tz; print(int(datetime(2026,5,26,17,35,tzinfo=tz.utc).timestamp()*1000))"`
 2. **Each data tile** → `"timeframe": {"tileTimeframe": {"from": "<WINDOW_START_MS>", "to": "<WINDOW_END_MS>"}, "tileTimeframeEnabled": true}` — without this, the global UI time picker overrides the tile even if `defaultTimeframe` is set
-3. **Each tile DQL query** → `from:"<WINDOW_START_ISO>", to:"<WINDOW_END_ISO>"` — **both `from:` and `to:` required**. `from:` without `to:` silently defaults to `now()`, scanning the incident window to the present (wrong for closed incidents)
+3. **Each tile DQL query** → `from:"<WINDOW_START_ISO>", to:"<WINDOW_END_ISO>"` — **both `from:` and `to:` required**. `from:` without `to:` silently defaults to `now()`, scanning the incident window to the present (wrong for closed incidents). For `makeTimeseries from:/to:` parameters, wrap the strings: `from:toTimestamp("<ISO>"), to:toTimestamp("<ISO>")`.
+
+**A tile window narrower than the dashboard window needs BOTH layers 2 and 3** — set `tileTimeframe` AND the query's `from:`/`to:`. The chart axis follows the query window, so a tileTimeframe alone does not narrow the chart.
 
 **Named exceptions — tiles that ALWAYS use relative time (even with `--epoch true`):**
 
 These tiles intentionally break the epoch pattern. The deploy validator will warn on them;
-that warning is expected and not blocking.
+that warning is expected and not blocking. Set the relative window in BOTH the query and the
+tile's `tileTimeframe` (see the narrower-window rule above).
 
 | Tile(s) | Time filter | Reason |
 |---|---|---|
-| `t-problems`, `t-blast` (Davis problems queries) | `from:now()-24h` | Davis requires relative bounds; absolute timestamps on `dt.davis.problems` are unreliable |
-| Any other Davis tile (KPI user count, crash rate from Davis) | `from:now()-24h` | Same — Davis data source constraint |
+| `t-problems`, `t-blast` (Davis problems queries) | `from:now()-7d` | Davis requires relative bounds; absolute timestamps on `dt.davis.problems` are unreliable |
+| Any other Davis tile (KPI user count, crash rate from Davis) | `from:now()-7d` | Same — Davis data source constraint |
 | `t-verify-kpi`, `t-verify-ts` (verification row) | `from:now()-15m` or `from:now()-30m` | Live state — must show whether the fix is currently holding, not whether it was fixed at incident time |
 
 **Dashboard timeframe rules — `--epoch false`:**
@@ -229,7 +233,7 @@ Never use a chart for log message text — no meaningful axis exists.
 fetch dt.entity.service
 | filter in(id, array("<AFFECTED_ID_1>","<AFFECTED_ID_2>"))
 | lookup [
-    fetch dt.davis.problems, from:now()-7h
+    fetch dt.davis.problems, from:now()-7d
     | filter event.status == "ACTIVE"
     | expand affected_entity_ids
   ], sourceField:id, lookupField:affected_entity_ids
@@ -377,6 +381,10 @@ for the JSON structure, validation, and mandatory deploy workflow.
 dtctl query '<DQL>' --plain
 ```
 
+Check `dtctl version` first. On dtctl **< v0.28.0**, run validation queries **serially** (one
+`dtctl` process at a time): concurrent invocations race on OAuth refresh-token rotation and fail
+with `invalid_grant` (dtctl issue #248, fixed by PR #249 in v0.28.0).
+
 For validation, run all queries with `from:"<WINDOW_START_ISO>", to:"<WINDOW_END_ISO>"` —
 the same absolute window used in the final JSON. Always include both `from:` and `to:`.
 `timeseries` accepts the same quoted ISO 8601 syntax as `fetch`.
@@ -429,46 +437,12 @@ y:29  h:3   Verification singleValue (w:8, id:"t-verify-kpi") | Verification tim
 
 #### Section Divider Tile
 
-The divider is a `singleValue` data tile that ALWAYS shows a blue background.
-The color rule `!= "0"` against a string field is always true — this is the trick.
+Use a markdown tile. Do NOT use a `singleValue` data tile with a `data record()` query and an
+always-true color rule as a divider — it renders as a blank bar.
 
 ```json
-"div-services": {
-  "title": "",
-  "type": "data",
-  "query": "data record(a=\"AFFECTED SERVICES\")",
-  "visualization": "singleValue",
-  "visualizationSettings": {
-    "singleValue": {
-      "labelMode": "none",
-      "label": "a",
-      "recordField": "a",
-      "prefixIcon": "<ICON>",
-      "colorThresholdTarget": "background",
-      "trend": { "isVisible": false }
-    },
-    "coloring": {
-      "colorRules": [{
-        "field": "a", "comparator": "!=", "value": "0",
-        "colorMode": "custom-color",
-        "customColor": { "Default": "var(--dt-colors-charts-categorical-color-01-default, #134fc9)" }
-      }]
-    },
-    "autoSelectVisualization": false
-  },
-  "querySettings": { "maxResultRecords": 1000, "defaultScanLimitGbytes": 500,
-                     "maxResultMegaBytes": 100, "defaultSamplingRatio": 10, "enableSampling": false },
-  "davis": { "enabled": false, "davisVisualization": { "isAvailable": true } }
-}
+"div-services": { "type": "markdown", "content": "### AFFECTED SERVICES" }
 ```
-
-**Icon selection** — use the most semantically relevant:
-- `"ServicesIcon"` — AFFECTED SERVICES, SERVICE SUMMARY
-- `"LineChartIcon"` — METRICS, TIMELINE, ROOT CAUSE SIGNALS
-- `"RequestIcon"` — REQUESTS, BLAST RADIUS
-- `"AlertIcon"` — VERIFICATION, PROBLEMS
-- `"InfrastructureIcon"` — INFRASTRUCTURE
-- `"ErrorIcon"` — ERROR SIGNALS, ROOT CAUSE
 
 #### lineChart Tile (timeseries metrics)
 
@@ -575,12 +549,12 @@ not the individual count trend.
   "querySettings": { "maxResultRecords": 2000, "defaultScanLimitGbytes": 500,
                      "maxResultMegaBytes": 1, "defaultSamplingRatio": 10, "enableSampling": false },
   "davis": { "enabled": false, "davisVisualization": { "isAvailable": true } },
-  "timeframe": { "tileTimeframe": { "from": "now()-7h", "to": "now()" }, "tileTimeframeEnabled": true }
+  "timeframe": { "tileTimeframe": { "from": "now()-7d", "to": "now()" }, "tileTimeframeEnabled": true }
 }
 ```
 
 Note the `"timeframe"` tile-level override — honeycomb uses `dt.davis.problems` lookup
-which needs a known window. Set `tileTimeframeEnabled: true` with `now()-7h`.
+which needs a known window. Set `tileTimeframeEnabled: true` with `now()-7d` (a shorter window misses problems that started earlier).
 
 #### Rich Table Tile (service details)
 
@@ -615,7 +589,7 @@ Coloring rules for service tables:
 "t-kpi-users": {
   "title": "Users Impacted",
   "type": "data",
-  "query": "fetch dt.davis.problems, from:now()-24h\n| filter display_id == \"<PROBLEM_ID>\"\n| fields dt.davis.affected_users_count",
+  "query": "fetch dt.davis.problems, from:now()-7d\n| filter display_id == \"<PROBLEM_ID>\"\n| fields dt.davis.affected_users_count",
   "visualization": "singleValue",
   "visualizationSettings": {
     "singleValue": {
@@ -646,7 +620,7 @@ Coloring rules for service tables:
 "t-problems": {
   "title": "Problems — <PROBLEM_ID>",
   "type": "data",
-  "query": "fetch dt.davis.problems, from:now()-24h\n| filter not(dt.davis.is_duplicate)\n| filter matchesPhrase(arrayToString(affected_entity_names, delimiter:\",\"), \"<ROOT_ENTITY_NAME_FRAGMENT>\")\n| fields display_id, event.name, event.category, event.status, event.start,\n         root_cause_entity_name, affected_entity_names, dt.davis.affected_users_count\n| sort event.start desc\n| limit 20",
+  "query": "fetch dt.davis.problems, from:now()-7d\n| filter not(dt.davis.is_duplicate)\n| filter matchesPhrase(arrayToString(affected_entity_names, delimiter:\",\"), \"<ROOT_ENTITY_NAME_FRAGMENT>\")\n| fields display_id, event.name, event.category, event.status, event.start,\n         root_cause_entity_name, affected_entity_names, dt.davis.affected_users_count\n| sort event.start desc\n| limit 20",
   "visualization": "table",
   "visualizationSettings": {
     "coloring": {
@@ -707,7 +681,7 @@ that answers the right question for an operator in the context of an active inci
 | CPU/memory % over time | **lineChart** | Smooth trend; compare hosts/PGIs |
 | Log message text | **table** | Text cannot be charted; frequency column sorts by impact |
 | Process count / request count | **lineChart** | Volume trend |
-| Section header / label | **singleValue** divider | `data record(a="LABEL")` + always-blue color rule |
+| Section header / label | **markdown** tile | `{"type":"markdown","content":"### LABEL"}` |
 | Business event timeline | **table** | Discrete events; timestamp + type + content |
 | Biz metric KPI (order count, revenue) | **singleValue** + **lineChart** | Scalar now + trend |
 
@@ -749,9 +723,8 @@ that answers the right question for an operator in the context of an active inci
    5xx, 4xx). A table with only red rules leaves healthy cells uncolored (grey),
    which reads as "unknown" to operators — always anchor with green at ≥ 0.
 
-8. **Section dividers must always use the `!= "0"` color rule trick** on the record
-   field so the blue color always fires. Never rely on a threshold value that might
-   match the actual data.
+8. **Section dividers must be markdown tiles** — `{"type":"markdown","content":"### LABEL"}`.
+   The `singleValue` + `data record()` divider trick renders as a blank bar.
 
 9. **The verification row (y:29) tiles must reflect the actual root failure signature.**
    The singleValue must count the specific error (e.g., IDENTITY_INSERT log lines),

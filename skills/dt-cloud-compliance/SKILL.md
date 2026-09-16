@@ -61,7 +61,7 @@ If not provided, determine recently touched resources:
 - GCP: `gcloud asset search-all-resources` with recent createTime filter
 
 Always confirm the active account/subscription/project before querying.
-For AWS, default account is `446130280781` (NORAM SE account) unless `--account` is specified.
+For AWS, default account is `<aws-account-id>` (NORAM SE account; the user supplies the real ID) unless `--account` is specified.
 
 ### Step 1 — Fetch tags for each in-scope resource
 
@@ -105,7 +105,7 @@ WARN conditions (not blocking but should be addressed):
   - dt_owner_email is set correctly but dt_owner_team is also absent (belt-and-suspenders)
   - Resource appears to be running >3 months and ShouldBeReserved is not set to TRUE
   - Detached EBS / Disk / Persistent Disk without SKIPPED_BY_AUTOMATION = TRUE
-  - GCP: dt_owner_email not converted to GCP label format (chris_labrado-dynatrace_com)
+  - GCP: dt_owner_email not converted to GCP label format (<your_email_local_part>-dynatrace_com)
 
 PASS: All mandatory tags present and valid
 ```
@@ -118,25 +118,25 @@ For any FAIL or WARN, generate the exact CLI command to fix it.
 ```bash
 aws ec2 create-tags \
   --resources <instance-id> \
-  --tags Key=dt_owner_email,Value=chris.labrado@dynatrace.com
+  --tags Key=dt_owner_email,Value=<your-email>@dynatrace.com
 ```
 
 **Azure — add/update tag:**
 ```bash
 az resource tag \
   --ids <resource-id> \
-  --tags dt_owner_email=chris.labrado@dynatrace.com Owner=chris.labrado@dynatrace.com
+  --tags dt_owner_email=<your-email>@dynatrace.com Owner=<your-email>@dynatrace.com
 # Also tag the resource group:
 az group update \
   --name <rg-name> \
-  --tags Owner=chris.labrado@dynatrace.com
+  --tags Owner=<your-email>@dynatrace.com
 ```
 
 **GCP — add/update label (note substitution: . → _ and @ → -):**
 ```bash
 gcloud compute instances add-labels <name> \
   --zone <zone> \
-  --labels dt_owner_email=chris_labrado-dynatrace_com
+  --labels dt_owner_email=<your_email_local_part>-dynatrace_com
 ```
 
 **Terraform — add to ignore_tags block to protect ACE auto-tags (Azure):**
@@ -157,12 +157,12 @@ Format:
 
 | Resource | Type | dt_owner_email | Owner | ACE:CREATED-BY | ShouldBeReserved | Result |
 |---|---|---|---|---|---|---|
-| <name/id> | EC2 | chris.labrado@dynatrace.com | — | — | — | ✅ PASS |
+| <name/id> | EC2 | <your-email>@dynatrace.com | — | — | — | ✅ PASS |
 | <name/id> | EBS | MISSING | — | — | — | ❌ FAIL |
 
 ### Remediation Actions Required
 1. [FAIL] <resource> — missing dt_owner_email
-   Fix: aws ec2 create-tags --resources <id> --tags Key=dt_owner_email,Value=chris.labrado@dynatrace.com
+   Fix: aws ec2 create-tags --resources <id> --tags Key=dt_owner_email,Value=<your-email>@dynatrace.com
 
 ### Enforcement Reminder
 Resources with invalid tags will be STOPPED in 14 days and TERMINATED in 28 days.
@@ -193,10 +193,11 @@ az storage account list --query "[?publicNetworkAccess=='Enabled'].{name:name,rg
 ---
 
 ## Chris LaBrado defaults
-- AWS account: `446130280781` (NORAM SE)
-- Default owner email for remediation: `chris.labrado@dynatrace.com`
-- GCP label format: `chris_labrado-dynatrace_com`
-- Azure `Owner` tag value: `chris.labrado@dynatrace.com`
+Placeholders below are supplied by the user at runtime.
+- AWS account: `<aws-account-id>` (NORAM SE)
+- Default owner email for remediation: `<your-email>@dynatrace.com`
+- GCP label format: `<your_email_local_part>-dynatrace_com`
+- Azure `Owner` tag value: `<your-email>@dynatrace.com`
 - dtctl context for SE work: `sprint-<your-tenant>` or `<your-dtctl-context>`
 
 ---

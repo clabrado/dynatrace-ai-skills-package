@@ -25,7 +25,7 @@ All 8 Tier 1/2 skills were re-validated end-to-end on 2026-06-03 and corrected. 
 - **Anti-hallucination guardrails.** A pre-dispatch reality gate refuses to fan out workers if Phase 0b couldn't run a successful query; every worker prompt opens with "no data = `<gap>`, never fabricate a number."
 - **Auth hardened.** Workers never run `dtctl auth login`/`refresh` — auth is orchestrator-only, interactive, and never races concurrent logins (a concurrent-login race corrupted the token store during testing).
 
-Full re-test log: `dt-uber-skills-fixrun-results-2026-06-03.md`.
+Full re-test log: `dt-uber-skills-fixrun-results-2026-06-03.md` (not published in this repo).
 
 ---
 
