@@ -74,7 +74,7 @@ flowchart TD
 
     subgraph F["Phase 4 — Dashboard Construction (dt-app-dashboards)"]
         direction TB
-        F1["4.1 Validate ALL queries via dtctl"]
+        F1["4.1 Validate ALL queries via dtctl\n(serially on dtctl < v0.28.0)"]
         F2["4.2 Build dashboard JSON (tiles + layouts)"]
         F3["4.3 deploy_dashboard.sh → URL"]
         F1 --> F2 --> F3
@@ -95,7 +95,9 @@ The dashboard API requires all three layers set consistently:
 |---|---|---|
 | `settings.defaultTimeframe` | Epoch ms strings (`"1779816900000"`) | **Must be epoch ms** — API silently ignores ISO 8601 and falls back to `now()-3h` |
 | `tileTimeframeEnabled: true` per tile | Epoch ms in `tileTimeframe.from/to` | Without this, UI time picker overrides individual tiles even if `defaultTimeframe` is set |
-| DQL `from:/to:` in each query | `from:toTimestamp("ISO"), to:toTimestamp("ISO")` | Both required — omitting `to:` silently defaults to `now()`, scanning incident→present for closed incidents |
+| DQL `from:/to:` in each query | `from:toTimestamp("ISO"), to:toTimestamp("ISO")` | Both required — omitting `to:` silently defaults to `now()`, scanning incident→present for closed incidents. Use `toTimestamp()` for `makeTimeseries from:/to:` strings |
+
+A tile window narrower than the dashboard window needs BOTH `tileTimeframe` and the query `from:/to:` — the chart axis follows the query window.
 
 **Epoch conversion:**
 ```bash
@@ -104,12 +106,12 @@ python3 -c "from datetime import datetime,timezone as tz; print(int(datetime(YYY
 
 **Named exceptions — always relative, even with `--epoch true`:**
 
-These tiles intentionally break the epoch pattern. Validator warnings on them are expected and not blocking.
+These tiles intentionally break the epoch pattern. Validator warnings on them are expected and not blocking. Set the relative window in both the query and `tileTimeframe`.
 
 | Tile(s) | Filter | Reason |
 |---|---|---|
-| `t-problems`, `t-blast` | `from:now()-24h` | Davis requires relative bounds on `dt.davis.problems` |
-| Davis KPI tiles (user count, crash rate) | `from:now()-24h` | Same — Davis data source constraint |
+| `t-problems`, `t-blast` | `from:now()-7d` | Davis requires relative bounds on `dt.davis.problems`; a 24h lookback misses older problems |
+| Davis KPI tiles (user count, crash rate) | `from:now()-7d` | Same — Davis data source constraint |
 | `t-verify-kpi`, `t-verify-ts` | `from:now()-15m` / `-30m` | Live state — must confirm the fix is currently holding, not that it was fixed at incident time |
 
 ### 2. Category-Adaptive Signal Queries
@@ -139,7 +141,7 @@ Visualization is chosen for the operational question being answered, not conveni
 | Service metric matrix | table + coloring | Multi-dimensional; cell color = threshold health |
 | Endpoint latency (N endpoints) | table | Too many dimensions for any chart axis |
 | Log message text | table | Text cannot be charted; frequency column sorts by impact |
-| Section header | singleValue divider | `data record()` + always-blue color rule |
+| Section header | markdown tile | `{"type":"markdown","content":"### LABEL"}` — the singleValue divider trick renders blank |
 
 ### 4. Layout Adaptation
 
@@ -198,13 +200,13 @@ Total tiles: 18 (with K8s) / 14 (without K8s). All tile IDs must have matching l
 ## Quality Rules (summary)
 
 1. Never invent DQL field names — run `| limit 1` to discover, or consult skills.
-2. Every query validated with `dtctl query --plain` before embedding. No exceptions.
+2. Every query validated with `dtctl query --plain` before embedding. No exceptions. Run validation serially on dtctl < v0.28.0 (issue #248).
 3. All three epoch layers must be set consistently (`--epoch true`).
 4. `from:` always requires `to:` — omitting `to:` silently uses `now()` as end.
 5. Every tile ID in `tiles` must have a matching entry in `layouts`.
 6. Every tile must have `davis: {enabled: false}` unless Davis AI is explicitly needed.
 7. Table coloring must include both green (≥0) and red (≥threshold) rules for health metrics — green-only tables read as "unknown."
-8. Section dividers use `data record(a="LABEL")` + `!= "0"` color rule to guarantee blue background.
+8. Section dividers are markdown tiles (`{"type":"markdown","content":"### LABEL"}`), not singleValue `data record()` tiles (render blank).
 9. Verification tiles must reflect the specific failure signature, not generic error counts.
 10. Tile height: dividers `h:1`, KPI `h:3`, charts `h:4`, summary tables `h:3`, detail tables `h:5`.
 
